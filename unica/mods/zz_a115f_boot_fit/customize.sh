@@ -1,7 +1,6 @@
-# A115F has a verified 4.32 GB dynamic-partition group, smaller than the A05s
-# donor image set. Keep this cleanup last so optional ROM mods cannot re-add the
-# removed apps after the fit profile runs. Core framework, SystemUI, launcher,
-# keyboard, telephony, Settings, and Google Play Services are deliberately kept.
+# Keep this cleanup last so optional ROM mods cannot re-add removed apps.
+# The A115F boot-first profile preserves core UI and framework; GmsCore is
+# temporarily omitted so product.img fits the stock product logical partition.
 if [ "$TARGET_CODENAME" != "a115f" ]; then
     LOG "Skipping A115F boot-first space profile for $TARGET_CODENAME"
     return 0
@@ -27,6 +26,7 @@ product|priv-app/PrivateComputeServices
 product|priv-app/Messages
 product|priv-app/Velvet
 product|priv-app/Phonesky
+product|priv-app/GmsCore
 system|system/priv-app/SamsungSmartSuggestions
 system|system/priv-app/SamSungCamera
 system|system/priv-app/OneDrive_Samsung_v3
@@ -56,4 +56,4 @@ system|system/priv-app/SamsungGallery2018
 system|system/app/SamsungTTSVoice_vi_VN_f00
 A115F_BOOT_FIRST_REMOVE_LIST
 
-LOG "A115F boot-first space profile applied; retained SystemUI, launcher, keyboard, Settings, telephony, and GMS core"
+LOG "A115F boot-first space profile applied; GMS core omitted to fit existing product partition"

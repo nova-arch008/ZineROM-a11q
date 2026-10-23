@@ -1,4 +1,4 @@
 id=a115f_boot_fit
 name=A115F boot-first space profile
 author=ZineROM
-description=A115F-only removal of optional donor apps to fit the verified stock super group while retaining core boot UI and services.
+description=A115F boot-first trim; temporarily omits Google Play Services so images fit existing logical partition extents without rewriting super metadata.

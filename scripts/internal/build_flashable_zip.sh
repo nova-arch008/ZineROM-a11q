@@ -92,6 +92,30 @@ BUILD_SUPER_EMPTY()
     EVAL "$CMD" || exit 1
 }
 
+VERIFY_EXISTING_LOGICAL_PARTITION_FIT()
+{
+    local PARTITION
+    local CAPACITY_VAR
+    local CAPACITY
+    local IMAGE_SIZE
+
+    for PARTITION in system vendor product system_ext odm vendor_dlkm odm_dlkm system_dlkm; do
+        [ -f "$TMP_DIR/$PARTITION.img" ] || continue
+        CAPACITY_VAR="TARGET_EXISTING_${PARTITION^^}_SIZE"
+        CAPACITY="${!CAPACITY_VAR}"
+        if ! [[ "$CAPACITY" =~ ^[0-9]+$ ]]; then
+            LOGE "Existing capacity for $PARTITION is not configured for the no-metadata-update target"
+            exit 1
+        fi
+        IMAGE_SIZE="$(GET_IMAGE_SIZE "$TMP_DIR/$PARTITION.img")" || exit 1
+        if [[ "$IMAGE_SIZE" -gt "$CAPACITY" ]]; then
+            LOGE "$PARTITION image ($IMAGE_SIZE bytes) exceeds existing logical partition capacity ($CAPACITY bytes)"
+            exit 1
+        fi
+        LOG "- $PARTITION image fits existing extent; remaining $((CAPACITY - IMAGE_SIZE)) bytes"
+    done
+}
+
 CREATE_ROM_ZIP()
 {
     local STORED_LIST="$OUT_DIR/stored.txt"
@@ -340,14 +364,27 @@ GENERATE_UPDATER_SCRIPT()
 
         # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/common.py#4007
         echo -e "\n# --- Start patching dynamic partitions ---\n\n"
-        echo -e "# Update dynamic partition metadata\n"
-        echo -n 'assert(update_dynamic_partitions(package_extract_file("dynamic_partitions_op_list")'
-        if $HAS_SUPER_EMPTY; then
-            # https://github.com/LineageOS/android_build/commit/98549f6893c3a93057e2d4cdd1015a93e9473b16
-            # https://github.com/LineageOS/android_bootable_deprecated-ota/commit/e97be4333bd3824b8561c9637e9e6de28bc29da0
-            echo -n ', package_extract_file("unsparse_super_empty.img")'
+        if $TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE; then
+            echo 'ui_print("Keeping existing logical partition layout; super metadata will not be rewritten.");'
+            echo 'ui_print("Checking all logical partition mappings before writing images...");'
+            $HAS_SYSTEM && echo 'assert(map_partition("system") != "");'
+            $HAS_VENDOR && echo 'assert(map_partition("vendor") != "");'
+            $HAS_PRODUCT && echo 'assert(map_partition("product") != "");'
+            $HAS_SYSTEM_EXT && echo 'assert(map_partition("system_ext") != "");'
+            $HAS_ODM && echo 'assert(map_partition("odm") != "");'
+            $HAS_VENDOR_DLKM && echo 'assert(map_partition("vendor_dlkm") != "");'
+            $HAS_ODM_DLKM && echo 'assert(map_partition("odm_dlkm") != "");'
+            $HAS_SYSTEM_DLKM && echo 'assert(map_partition("system_dlkm") != "");'
+        else
+            echo -e "# Update dynamic partition metadata\n"
+            echo -n 'assert(update_dynamic_partitions(package_extract_file("dynamic_partitions_op_list")'
+            if $HAS_SUPER_EMPTY; then
+                # https://github.com/LineageOS/android_build/commit/98549f6893c3a93057e2d4cdd1015a93e9473b16
+                # https://github.com/LineageOS/android_bootable_deprecated-ota/commit/e97be4333bd3824b8561c9637e9e6de28bc29da0
+                echo -n ', package_extract_file("unsparse_super_empty.img")'
+            fi
+            echo    '));'
         fi
-        echo    '));'
         if $HAS_SYSTEM; then
             echo -e "\n# Patch partition system\n"
             echo    'ui_print("Patching system image unconditionally...");'
@@ -558,11 +595,17 @@ while IFS= read -r f; do
 done < <(find "$WORK_DIR" -maxdepth 1 -type d)
 LOG_STEP_OUT
 
-LOG "- Building unsparse_super_empty.img"
-BUILD_SUPER_EMPTY
+if $TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE; then
+    LOG "- Verifying images fit existing logical partition extents"
+    VERIFY_EXISTING_LOGICAL_PARTITION_FIT
+    LOG "- Keeping existing dynamic partition metadata unchanged"
+else
+    LOG "- Building unsparse_super_empty.img"
+    BUILD_SUPER_EMPTY
 
-LOG "- Generating dynamic_partitions_op_list"
-GENERATE_OP_LIST
+    LOG "- Generating dynamic_partitions_op_list"
+    GENERATE_OP_LIST
+fi
 
 while IFS= read -r f; do
     PARTITION="$(basename "$f" | sed "s/.img//g")"
