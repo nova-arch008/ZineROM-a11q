@@ -68,6 +68,7 @@ COPY_SOURCE_FIRMWARE()
             SET_METADATA "system" "system_ext" 0 0 644 "u:object_r:system_file:s0"
             sed "s/^\/system_ext/\/system\/system_ext/g" "$FW_DIR/$SOURCE_FIRMWARE_PATH/file_context-system_ext" >> "$WORK_DIR/configs/file_context-system"
             sed "s/^system_ext/system\/system_ext/g" "$FW_DIR/$SOURCE_FIRMWARE_PATH/fs_config-system_ext" >> "$WORK_DIR/configs/fs_config-system"
+            SET_METADATA "system" "system/system_ext" 0 0 755 "u:object_r:system_file:s0"
 
             DELETE_FROM_WORK_DIR "system" "system/system_ext/etc/NOTICE.xml.gz"
             DELETE_FROM_WORK_DIR "system" "system/system_ext/etc/fs_config_dirs"

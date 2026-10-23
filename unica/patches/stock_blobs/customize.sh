@@ -58,13 +58,23 @@ else
 fi
 DELETE_FROM_WORK_DIR "system" "system/saiv"
 ADD_TO_WORK_DIR "$TARGET_FIRMWARE_PATH" "system" "system/saiv" 0 0 755 "u:object_r:system_file:s0"
-DELETE_FROM_WORK_DIR "system" "system/saiv/textrecognition"
-ADD_TO_WORK_DIR "$SOURCE_FIRMWARE_PATH" "system" "system/saiv/textrecognition" 0 0 755 "u:object_r:system_file:s0"
+if [ -d "$SOURCE_FIRMWARE_PATH/system/system/saiv/textrecognition" ]; then
+    if [ -d "$WORK_DIR/system/system/saiv/textrecognition" ]; then
+        DELETE_FROM_WORK_DIR "system" "system/saiv/textrecognition"
+    fi
+    ADD_TO_WORK_DIR "$SOURCE_FIRMWARE_PATH" "system" "system/saiv/textrecognition" 0 0 755 "u:object_r:system_file:s0"
+else
+    LOG "- Skipping absent source SAIV textrecognition blob"
+fi
 LOG_STEP_OUT
 
 LOG_STEP_IN "- Replacing cameradata blobs with stock"
 DELETE_FROM_WORK_DIR "system" "system/cameradata"
-ADD_TO_WORK_DIR "$TARGET_FIRMWARE_PATH" "system" "system/cameradata" 0 0 755 "u:object_r:system_file:s0"
+if [ -d "$TARGET_FIRMWARE_PATH/system/system/cameradata" ]; then
+    ADD_TO_WORK_DIR "$TARGET_FIRMWARE_PATH" "system" "system/cameradata" 0 0 755 "u:object_r:system_file:s0"
+else
+    LOG "- Target firmware has no system cameradata; dropping donor-only data"
+fi
 
 if [ -f "$TARGET_FIRMWARE_PATH/system/system/usr/share/alsa/alsa.conf" ]; then
     LOG_STEP_IN "- Add stock alsa.conf"

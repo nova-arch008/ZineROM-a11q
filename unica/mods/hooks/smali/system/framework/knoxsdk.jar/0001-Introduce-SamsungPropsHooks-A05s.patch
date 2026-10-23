@@ -1,0 +1,73 @@
+From a115f00000000000000000000000000000000001 Mon Sep 17 00:00:00 2001
+From: Manus <noreply@manus.im>
+Date: Fri, 23 Oct 2026 06:14:00 +0300
+Subject: [PATCH] Adapt SamsungPropsHooks EDM API level hook for A05s
+
+The A05s KnoxSDK adds an isOfficiallySupported() guard not present in the
+upstream patch context. Route the whole API-level query through the hook.
+
+---
+ smali/com/samsung/android/knox/EnterpriseDeviceManager.smali | 22 +-
+ 1 file changed, 2 insertions(+), 20 deletions(-)
+
+diff --git a/smali/com/samsung/android/knox/EnterpriseDeviceManager.smali b/smali/com/samsung/android/knox/EnterpriseDeviceManager.smali
+index 0000000..0000000 100644
+--- a/smali/com/samsung/android/knox/EnterpriseDeviceManager.smali
++++ b/smali/com/samsung/android/knox/EnterpriseDeviceManager.smali
+@@ -604,47 +604,15 @@
+     return v0
+ .end method
+ 
+ .method public static greylist getAPILevel()I
+-    .locals 2
+-
+-    :try_start_0
+-    invoke-static {}, Lcom/samsung/android/knox/EnterpriseDeviceManager;->isOfficiallySupported()Z
+-
+-    move-result v0
+-
+-    if-eqz v0, :cond_0
+-
+-    invoke-static {}, Lcom/samsung/android/knox/EdmUtils;->getAPILevelForInternal()I
+-
+-    move-result v0
+-    :try_end_0
+-    .catch Ljava/lang/UnsupportedOperationException; {:try_start_0 .. :try_end_0} :catch_0
+-
+-    return v0
+-
+-    :catch_0
+-    move-exception v0
+-
+-    goto :goto_0
+-
+-    :cond_0
+-    const/4 v0, -0x1
+-
+-    return v0
+-
+-    :goto_0
+-    sget-object v1, Lcom/samsung/android/knox/EnterpriseDeviceManager;->TAG:Ljava/lang/String;
+-
+-    invoke-virtual {v0}, Ljava/lang/UnsupportedOperationException;->getMessage()Ljava/lang/String;
+-
+-    move-result-object v0
+-
+-    invoke-static {v1, v0}, Landroid/util/Log;->e(Ljava/lang/String;Ljava/lang/String;)I
+-
+-    const/4 v0, 0x0
+-
+-    return v0
++    .locals 1
++
++    invoke-static {}, Lio/mesalabs/unica/SamsungPropsHooks;->onEDMGetAPILevelHook()I
++
++    move-result v0
++
++    return v0
+ .end method
+ 
+ .method public static greylist getAPILevelForInternal()I
+     .locals 1
+-- 
+2.49.0

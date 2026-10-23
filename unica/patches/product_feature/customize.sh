@@ -11,6 +11,8 @@ GET_FP_SENSOR_TYPE()
         echo "optical"
     elif [[ "$1" == *"side"* ]]; then
         echo "side"
+    elif [[ "$1" == *"rear"* ]]; then
+        echo "rear"
     else
         LOGE "Unsupported fingerprint type: $1"
     fi
@@ -23,7 +25,11 @@ REGION=$(echo -n "$TARGET_FIRMWARE" | cut -d "/" -f 2)
 if [[ "$SOURCE_PRODUCT_FIRST_API_LEVEL" != "$TARGET_PRODUCT_FIRST_API_LEVEL" ]]; then
     LOG_STEP_IN "- Applying MAINLINE_API_LEVEL patches"
 
-    DECODE_APK "system" "system/framework/esecomm.jar"
+    if [ -f "$WORK_DIR/system/system/framework/esecomm.jar" ]; then
+        DECODE_APK "system" "system/framework/esecomm.jar"
+    else
+        LOG "- Skipping absent MAINLINE_API_LEVEL file: esecomm.jar"
+    fi
     DECODE_APK "system" "system/framework/services.jar"
 
     FTP="

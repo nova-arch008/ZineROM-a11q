@@ -1,0 +1,29 @@
+From 5a115f0000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Manus <noreply@manus.im>
+Date: Fri, 23 Oct 2026 05:54:00 +0300
+Subject: [PATCH] Skip KnoxGuard startup for A057F donor
+
+The A05s SystemServer layout differs from the original QSSI patch. Skip only
+KnoxGuard registration, preserving the following ConnectivityService startup.
+
+---
+ smali/com/android/server/SystemServer.smali | 4 +---
+ 1 file changed, 1 insertion(+), 3 deletions(-)
+
+diff --git a/smali/com/android/server/SystemServer.smali b/smali/com/android/server/SystemServer.smali
+index 0000000..0000000 100644
+--- a/smali/com/android/server/SystemServer.smali
++++ b/smali/com/android/server/SystemServer.smali
+@@ -9293,9 +9293,5 @@
+     invoke-virtual/range {p1 .. p1}, Landroid/util/TimingsTraceLog;->traceEnd()V
+ 
+-    invoke-static {}, Landroid/os/FactoryTest;->isFactoryBinary()Z
+-
+-    move-result v1
+-
+-    if-nez v1, :cond_3b
++    goto :cond_3b
+ 
+     const-string v1, "StartKnoxGuard"
+-- 
+2.49.0

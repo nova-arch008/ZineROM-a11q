@@ -1,0 +1,32 @@
+From 5a115f0000000000000000000000000000000001 Mon Sep 17 00:00:00 2001
+From: Manus <noreply@manus.im>
+Date: Fri, 23 Oct 2026 06:03:00 +0300
+Subject: [PATCH] Use target vendor identity in CoreRune for A057F donor
+
+The A05s CoreRune layout differs from the upstream hunk context. Read the
+A11 target's vendor device/model properties for hardware-specific checks.
+
+---
+ smali_classes6/com/samsung/android/rune/CoreRune.smali | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/smali_classes6/com/samsung/android/rune/CoreRune.smali b/smali_classes6/com/samsung/android/rune/CoreRune.smali
+index 0000000..0000000 100644
+--- a/smali_classes6/com/samsung/android/rune/CoreRune.smali
++++ b/smali_classes6/com/samsung/android/rune/CoreRune.smali
+@@ -4685,5 +4685,5 @@
+     sput-boolean v0, Lcom/samsung/android/rune/CoreRune;->SUPPORT_APP_JUMP_BLOCK:Z
+ 
+-    const-string v0, "ro.product.device"
++    const-string v0, "ro.product.vendor.device"
+ 
+     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+@@ -4861,5 +4861,5 @@
+     if-eqz v0, :cond_4a
+ 
+-    const-string v0, "ro.product.model"
++    const-string v0, "ro.product.vendor.model"
+ 
+     invoke-static {v0}, Landroid/os/SystemProperties;->get(Ljava/lang/String;)Ljava/lang/String;
+-- 
+2.49.0
