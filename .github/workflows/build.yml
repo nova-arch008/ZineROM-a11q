@@ -2,6 +2,9 @@ name: Build ZineROM One UI 7 (Galaxy A11)
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - manus/a115f-build-once
 
 permissions:
   contents: read
