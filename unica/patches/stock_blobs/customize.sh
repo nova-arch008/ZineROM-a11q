@@ -56,9 +56,13 @@ else
         DELETE_FROM_WORK_DIR "system" "system/etc/saiv"
     fi
 fi
-DELETE_FROM_WORK_DIR "system" "system/saiv"
-ADD_TO_WORK_DIR "$TARGET_FIRMWARE_PATH" "system" "system/saiv" 0 0 755 "u:object_r:system_file:s0"
-if [ -d "$SOURCE_FIRMWARE_PATH/system/system/saiv/textrecognition" ]; then
+	DELETE_FROM_WORK_DIR "system" "system/saiv"
+	if [ -d "$TARGET_FIRMWARE_PATH/system/system/saiv" ]; then
+	    ADD_TO_WORK_DIR "$TARGET_FIRMWARE_PATH" "system" "system/saiv" 0 0 755 "u:object_r:system_file:s0"
+	else
+	    LOG "Target firmware has no system/saiv; dropping donor-only SAIV tree"
+	fi
+	if [ -d "$SOURCE_FIRMWARE_PATH/system/system/saiv/textrecognition" ]; then
     if [ -d "$WORK_DIR/system/system/saiv/textrecognition" ]; then
         DELETE_FROM_WORK_DIR "system" "system/saiv/textrecognition"
     fi
