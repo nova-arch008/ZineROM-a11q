@@ -102,6 +102,15 @@ jobs:
           source ./buildenv.sh ${{ matrix.target }}
           ./scripts/import_samfw_firmware.sh
 
+      - name: Audit A115F fingerprint inputs
+        continue-on-error: true
+        run: |
+          python3 scripts/audit_a115f_fingerprint.py \
+            --donor-framework out/fw/SM-A057F_TUR/system/system/framework/framework.jar \
+            --target-vendor out/fw/SM-A115F_MWD/vendor \
+            --source-config unica/configs/qssi.sh \
+            --target-config target/a115f/config.sh
+
       - name: Build ROM
         run: |
           source ./buildenv.sh ${{ matrix.target }}
