@@ -16,6 +16,12 @@ SPEC.loader.exec_module(AUDIT)
 
 
 class AuditA115FFingerprintTests(unittest.TestCase):
+    def test_a05s_side_donor_maps_to_a11_rear_sensor(self) -> None:
+        source_config = (ROOT / "unica/configs/qssi.sh").read_text(encoding="utf-8")
+        target_config = (ROOT / "target/a115f/config.sh").read_text(encoding="utf-8")
+        self.assertIn('SOURCE_FP_SENSOR_CONFIG="google_touch_side,settings=3"', source_config)
+        self.assertIn('TARGET_FP_SENSOR_CONFIG="rear,settings=0"', target_config)
+
     def test_reads_fingerprint_configuration_strings_from_framework_dex(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             jar = Path(directory) / "framework.jar"
