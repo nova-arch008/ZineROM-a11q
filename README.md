@@ -60,15 +60,13 @@ Experience unrestricted flagship artificial intelligence, carefully optimized to
 Before starting, your device's bootloader must be completely unlocked. 
 * If you don't know how to unlock the bootloader on your Samsung device, follow the official and detailed guide on [XDA Developers Bootloader Unlock Guide](https://xdaforums.com/t/how-to-unlock-bootloader.4244757/).
 
-### Flashing Steps (via TWRP / Custom Recovery):
-1. Reboot your device into your custom recovery.
-2. Go to Wipe and perform a clean wipe (`Data`, `Cache`, `Dalvik`, and `System`).
-3. Flash the system images in the following strict order:
-   * **Flash `system.img`**
-   * **Flash `product.img`**
-   * **Flash `system.ext.img`**
-4. Go to Wipe -> Select **Format Data** and type `yes`.
-5. Reboot your system and enjoy!
+### Device-specific installation instructions
+
+This repository has multiple device targets; recovery steps and partition layouts are not interchangeable. **Do not use generic manual image-flashing or wipe instructions.**
+
+For the experimental Galaxy A11 `SM-A115F` port, use only [`target/a115f/FLASHING_A115F.md`](target/a115f/FLASHING_A115F.md). That guide is device-specific but does not mean the ROM has been confirmed to boot. Back up data and verify that every recovery/vbmeta file is for `SM-A115F` before following any flashing procedure.
+
+For other device targets, use that target's own documented instructions. If no target-specific guide exists, do not flash based on this generic README.
 
 ---
 

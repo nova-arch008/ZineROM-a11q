@@ -31,6 +31,52 @@ AP_TAR=""
 
 TMP_DIR="$(mktemp -d)"
 
+cleanup_tmp_mount()
+{
+    sudo -n umount "$TMP_DIR" &> /dev/null || true
+    rm -rf "$TMP_DIR"
+}
+trap cleanup_tmp_mount EXIT
+
+EXTRACTED_OUTPUTS_COMPLETE()
+{
+    local partition image
+
+    for partition in ${EXTRACT_REQUIRED_PARTITIONS:-}; do
+        [ -d "$FW_DIR/${MODEL}_${CSC}/$partition" ] || return 1
+        [ -n "$(find "$FW_DIR/${MODEL}_${CSC}/$partition" -type f -print -quit 2> /dev/null)" ] || return 1
+        [ -s "$FW_DIR/${MODEL}_${CSC}/fs_config-$partition" ] || return 1
+        [ -s "$FW_DIR/${MODEL}_${CSC}/file_context-$partition" ] || return 1
+    done
+
+    for image in ${EXTRACT_REQUIRED_KERNEL_IMAGES:-}; do
+        [ -s "$FW_DIR/${MODEL}_${CSC}/kernel/$image" ] || return 1
+    done
+
+    return 0
+}
+
+CHECK_EXTRACTION_SPACE()
+{
+    local min_gib="${A11_MIN_EXTRACT_FREE_GIB:-12}"
+    local available_bytes
+
+    if [[ ! "$min_gib" =~ ^[0-9]+$ ]]; then
+        LOGE "A11_MIN_EXTRACT_FREE_GIB must be a positive integer"
+        return 1
+    fi
+    available_bytes="$(df -PB1 "$OUT_DIR" | awk 'END {print $4}')"
+    if [[ ! "$available_bytes" =~ ^[0-9]+$ ]]; then
+        LOGE "Could not determine free workspace space"
+        return 1
+    fi
+    if (( available_bytes < min_gib * 1024 * 1024 * 1024 )); then
+        LOGE "At least ${min_gib} GiB must be free before firmware extraction; available: $((available_bytes / 1024 / 1024 / 1024)) GiB"
+        return 1
+    fi
+    return 0
+}
+
 EXTRACT_AVB_BINARIES()
 {
     if FILE_EXISTS_IN_TAR "$BL_TAR" "vbmeta.img" || FILE_EXISTS_IN_TAR "$BL_TAR" "vbmeta.img.lz4"; then
@@ -55,6 +101,15 @@ EXTRACT_KERNEL_BINARIES()
 {
     local FILES="boot.img dtbo.img init_boot.img vendor_boot.img"
 
+    if [ ! -f "$AP_TAR" ]; then
+        if [ -n "$(find "$FW_DIR/${MODEL}_${CSC}/kernel" -maxdepth 1 -type f -name "*.img" -print -quit 2> /dev/null)" ]; then
+            LOG "- Reusing previously extracted kernel binaries"
+            return 0
+        fi
+        LOGE "AP tar is missing and no extracted kernel binaries are available"
+        exit 1
+    fi
+
     LOG_STEP_IN "- Extracting kernel binaries"
 
     mkdir -p "$FW_DIR/${MODEL}_${CSC}/kernel"
@@ -74,38 +129,57 @@ EXTRACT_KERNEL_BINARIES()
 EXTRACT_OS_PARTITIONS()
 {
     # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/common.py#131
-    local FILES="system.img vendor.img product.img system_ext.img odm.img vendor_dlkm.img odm_dlkm.img system_dlkm.img"
+    local FILES="${EXTRACT_PARTITIONS:-system.img vendor.img product.img system_ext.img odm.img vendor_dlkm.img odm_dlkm.img system_dlkm.img}"
+    local SUPER_IMAGE="$FW_DIR/${MODEL}_${CSC}/super.img"
 
     LOG_STEP_IN "- Extracting OS partitions"
 
     [ -f "$FW_DIR/${MODEL}_${CSC}/os_partitions_metadata.txt" ] && rm -f "$FW_DIR/${MODEL}_${CSC}/os_partitions_metadata.txt"
 
-    if FILE_EXISTS_IN_TAR "$AP_TAR" "super.img" || FILE_EXISTS_IN_TAR "$AP_TAR" "super.img.lz4"; then
-        EXTRACT_FILE_FROM_TAR "$AP_TAR" "super.img" || exit 1
-        UNSPARSE_IMAGE "$FW_DIR/${MODEL}_${CSC}/super.img" || exit 1
+    if [ -f "$SUPER_IMAGE" ] || { [ -n "$AP_TAR" ] && { FILE_EXISTS_IN_TAR "$AP_TAR" "super.img" || FILE_EXISTS_IN_TAR "$AP_TAR" "super.img.lz4"; }; }; then
+        if [ ! -f "$SUPER_IMAGE" ]; then
+            EXTRACT_FILE_FROM_TAR "$AP_TAR" "super.img" || exit 1
+            if [ -n "$GITHUB_ACTIONS" ]; then
+                LOG "- Removing AP tar after saving super.img and kernel binaries"
+                rm -f "$AP_TAR"
+            fi
+        fi
+        UNSPARSE_IMAGE "$SUPER_IMAGE" || exit 1
 
         LOG "- Unpacking super.img..."
 
-        STORE_OS_PARTITION_METADATA "$FW_DIR/${MODEL}_${CSC}/super.img"
+        STORE_OS_PARTITION_METADATA "$SUPER_IMAGE"
 
         # shellcheck disable=SC2013
         for p in $(grep "partition_list" "$FW_DIR/${MODEL}_${CSC}/os_partitions_metadata.txt" | cut -d "=" -f 2 -s); do
+            case " $FILES " in
+                *" ${p}.img "*) ;;
+                *) continue ;;
+            esac
             if grep -q "virtual_ab" "$FW_DIR/${MODEL}_${CSC}/os_partitions_metadata.txt"; then
                 # In Virtual A/B devices only the A slot is filled
-                EVAL "lpunpack -p \"${p}_a\" \"$FW_DIR/${MODEL}_${CSC}/super.img\" \"$FW_DIR/${MODEL}_${CSC}\"" || exit 1
+                EVAL "lpunpack -p \"${p}_a\" \"$SUPER_IMAGE\" \"$FW_DIR/${MODEL}_${CSC}\"" || exit 1
                 mv -f "$FW_DIR/${MODEL}_${CSC}/${p}_a.img" "$FW_DIR/${MODEL}_${CSC}/${p}.img"
             else
-                EVAL "lpunpack -p \"${p}\" \"$FW_DIR/${MODEL}_${CSC}/super.img\" \"$FW_DIR/${MODEL}_${CSC}\"" || exit 1
+                EVAL "lpunpack -p \"${p}\" \"$SUPER_IMAGE\" \"$FW_DIR/${MODEL}_${CSC}\"" || exit 1
             fi
         done
 
-        rm -f "$FW_DIR/${MODEL}_${CSC}/super.img"
-    else
+        rm -f "$SUPER_IMAGE"
+    elif [ -n "$AP_TAR" ]; then
         for f in $FILES; do
             EXTRACT_FILE_FROM_TAR "$AP_TAR" "$f" || exit 1
             [ -f "$FW_DIR/${MODEL}_${CSC}/$f" ] || continue
             UNSPARSE_IMAGE "$FW_DIR/${MODEL}_${CSC}/$f" || exit 1
             STORE_OS_PARTITION_METADATA "$FW_DIR/${MODEL}_${CSC}/$f"
+        done
+    else
+        for f in $FILES; do
+            if [ -f "$FW_DIR/${MODEL}_${CSC}/$f" ] || [ -d "$FW_DIR/${MODEL}_${CSC}/${f%.img}" ]; then
+                continue
+            fi
+            LOGE "AP tar is missing and no extracted image or partition directory is available for ${f%.img}"
+            exit 1
         done
     fi
 
@@ -126,7 +200,7 @@ EXTRACT_OS_PARTITIONS()
         LOG "- Unpacking $(basename "$f")..."
 
         mkdir -p "$FW_DIR/${MODEL}_${CSC}/$PARTITION"
-        sudo umount "$FW_DIR/${MODEL}_${CSC}/$f" &> /dev/null
+        sudo umount "$TMP_DIR" &> /dev/null || true
         if [[ "$(GET_IMAGE_FILE_SYSTEM "$FW_DIR/${MODEL}_${CSC}/$f")" == "erofs" ]]; then
             EVAL "sudo env \"PATH=$PATH\" fuse.erofs \"$FW_DIR/${MODEL}_${CSC}/$f\" \"$TMP_DIR\"" || exit 1
         else
@@ -376,52 +450,56 @@ for i in "${FIRMWARES[@]}"; do
 
     LOG_STEP_IN
 
-    if ! $FORCE; then
-        # Skip if firmware has been extracted
-        if [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ]; then
-            if ! COMPARE_SEC_BUILD_VERSION "$(cat "$FW_DIR/${MODEL}_${CSC}/.extracted")" "$LATEST_FIRMWARE"; then
-                if [ -f "$ODIN_DIR/${MODEL}_${CSC}/.downloaded" ] && \
-                        ! COMPARE_SEC_BUILD_VERSION "$(cat "$FW_DIR/${MODEL}_${CSC}/.extracted")" "$(cat "$ODIN_DIR/${MODEL}_${CSC}/.downloaded")"; then
-                    LOG "\033[0;33m! A newer firmware has been downloaded, use --force flag if you want to overwrite it\033[0m"
-                else
-                    LOG "\033[0;33m! A newer firmware is available for download\033[0m"
-                fi
-            else
-                LOG "\033[0;33m! This firmware has already been extracted\033[0m"
-            fi
+    EXTRACTED_MARKER_FILE="$FW_DIR/${MODEL}_${CSC}/.extracted"
+    DOWNLOADED_MARKER_FILE="$ODIN_DIR/${MODEL}_${CSC}/.downloaded"
+    EXTRACTED_FIRMWARE="$(cat "$EXTRACTED_MARKER_FILE" 2> /dev/null || true)"
+    DOWNLOADED_FIRMWARE="$(cat "$DOWNLOADED_MARKER_FILE" 2> /dev/null || true)"
 
-            LOG_STEP_OUT; LOG_STEP_OUT
-            continue
-        fi
+    if ! $FORCE && [[ "$EXTRACTED_FIRMWARE" == "$LATEST_FIRMWARE" ]] && EXTRACTED_OUTPUTS_COMPLETE; then
+        LOG "- Matching firmware extraction and required outputs already exist"
+        LOG_STEP_OUT; LOG_STEP_OUT
+        continue
     fi
 
-    # Abort if firmware has not been downloaded
-    if [ ! -f "$ODIN_DIR/${MODEL}_${CSC}/.downloaded" ]; then
-        LOG "\033[0;31m! The firmware has not been downloaded\033[0m"
+    if [ ! "$DOWNLOADED_FIRMWARE" ]; then
+        LOGE "The exact pinned firmware has not been downloaded"
+        exit 1
+    elif [[ "$DOWNLOADED_FIRMWARE" != "$LATEST_FIRMWARE" ]]; then
+        LOGE "Downloaded firmware marker does not match the pinned firmware; refusing to extract stale files"
         exit 1
     fi
 
-    [ -f "$FW_DIR/${MODEL}_${CSC}/.extracted" ] && rm -rf "$FW_DIR/${MODEL}_${CSC}"
+    PINNED_AP_BUILD="${DOWNLOADED_FIRMWARE%%/*}"
+    BL_TAR="$(find "$ODIN_DIR/${MODEL}_${CSC}" -maxdepth 1 -type f -name "BL_${PINNED_AP_BUILD}*.md5" | sort -r | head -n 1)"
+    AP_TAR="$(find "$ODIN_DIR/${MODEL}_${CSC}" -maxdepth 1 -type f -name "AP_${PINNED_AP_BUILD}*.md5" | sort -r | head -n 1)"
+
+    if [ ! -f "$BL_TAR" ]; then
+        LOGE "No BL tar matching pinned AP build $PINNED_AP_BUILD was found"
+        exit 1
+    elif [ ! -f "$AP_TAR" ]; then
+        LOGE "No AP tar matching pinned build $PINNED_AP_BUILD was found; partial extraction reuse is disabled"
+        exit 1
+    fi
+
+    CHECK_EXTRACTION_SPACE || exit 1
+
+    if [ -d "$FW_DIR/${MODEL}_${CSC}" ]; then
+        LOG "- Removing stale or incomplete extracted firmware before a clean extraction"
+        rm -rf "$FW_DIR/${MODEL}_${CSC}"
+    fi
     mkdir -p "$FW_DIR/${MODEL}_${CSC}"
-
-    DOWNLOADED_FIRMWARE="$(cat "$ODIN_DIR/${MODEL}_${CSC}/.downloaded")"
-
-    BL_TAR="$(find "$ODIN_DIR/${MODEL}_${CSC}" -name "BL_$(cut -d "/" -f 1 -s <<< "$DOWNLOADED_FIRMWARE")*.md5" | sort -r | head -n 1)"
-    AP_TAR="$(find "$ODIN_DIR/${MODEL}_${CSC}" -name "AP_$(cut -d "/" -f 1 -s <<< "$DOWNLOADED_FIRMWARE")*.md5" | sort -r | head -n 1)"
-
-    if [ ! "$BL_TAR" ]; then
-        LOG "\033[0;31m! No BL tar found\033[0m"
-        exit 1
-    elif [ ! "$AP_TAR" ]; then
-        LOG "\033[0;31m! No AP tar found\033[0m"
-        exit 1
-    fi
 
     EXTRACT_KERNEL_BINARIES
     EXTRACT_OS_PARTITIONS
     EXTRACT_AVB_BINARIES
 
-    echo -n "$DOWNLOADED_FIRMWARE" > "$FW_DIR/${MODEL}_${CSC}/.extracted"
+    if ! EXTRACTED_OUTPUTS_COMPLETE; then
+        LOGE "One or more required firmware partitions/kernel images are missing; refusing to mark extraction complete"
+        exit 1
+    fi
+
+    printf '%s' "$DOWNLOADED_FIRMWARE" > "$FW_DIR/${MODEL}_${CSC}/.extracted.tmp"
+    mv -f "$FW_DIR/${MODEL}_${CSC}/.extracted.tmp" "$FW_DIR/${MODEL}_${CSC}/.extracted"
 
     if [ -n "$GITHUB_ACTIONS" ]; then
         rm -rf "$ODIN_DIR/${MODEL}_${CSC}"

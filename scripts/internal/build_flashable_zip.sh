@@ -175,8 +175,9 @@ CREATE_ROM_ZIP()
     local STORED_LIST="$OUT_DIR/stored.txt"
     local COMPRESSED_LIST="$OUT_DIR/compressed.txt"
 
-    [ -f "$STORED_LIST" ] || [ -f "$COMPRESSED_LIST" ] && rm -f "$STORED_LIST" "$COMPRESSED_LIST"
-    touch "$STORED_LIST" "$COMPRESSED_LIST"
+    rm -f "$STORED_LIST" "$COMPRESSED_LIST"
+    : > "$STORED_LIST"
+    : > "$COMPRESSED_LIST"
 
     EVAL "rm -f \"$TMP_DIR/rom.zip\"" || exit 1
 
@@ -210,6 +211,15 @@ GENERATE_BUILD_INFO()
         echo "timestamp=$ROM_BUILD_TIMESTAMP"
         echo "security_patch_version=$(GET_PROP "system" "ro.build.version.security_patch")"
     } > "$BUILD_INFO_FILE"
+
+    if [[ "$TARGET_CODENAME" == "a115f" ]]; then
+        local PARTITION_METADATA="$WORK_DIR/configs/target_os_partitions_metadata.txt"
+        if [[ ! -s "$PARTITION_METADATA" ]]; then
+            LOGE "Target super partition metadata is missing; refusing to build A115F ZIP"
+            exit 1
+        fi
+        EVAL "cp -a \"$PARTITION_METADATA\" \"$TMP_DIR/target_os_partitions_metadata.txt\"" || exit 1
+    fi
 }
 
 # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/common.py#4042
@@ -713,6 +723,17 @@ if $ROM_IS_OFFICIAL; then
     rm -f "$TMP_DIR/rom.zip"
 else
     mv -f "$TMP_DIR/rom.zip" "$OUT_DIR/$ZIP_FILE_NAME"
+fi
+
+if [[ "$TARGET_CODENAME" == "a115f" ]]; then
+    LOG "- Validating A115F flashable ZIP"
+    if ! python3 "$SRC_DIR/scripts/validate_a115f_zip.py" \
+        "$OUT_DIR/$ZIP_FILE_NAME" \
+        --config "$SRC_DIR/target/a115f/config.sh"; then
+        rm -f "$OUT_DIR/$ZIP_FILE_NAME"
+        LOGE "A115F ZIP validation failed; removing the invalid package"
+        exit 1
+    fi
 fi
 
 exit 0

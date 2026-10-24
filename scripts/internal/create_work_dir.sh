@@ -130,6 +130,15 @@ COPY_TARGET_FIRMWARE()
             [ -f "$WORK_DIR/configs/fs_config-$f" ] && rm -f "$WORK_DIR/configs/fs_config-$f"
         fi
     done
+
+    if [[ "$TARGET_CODENAME" == "a115f" ]]; then
+        local PARTITION_METADATA="$FW_DIR/$TARGET_FIRMWARE_PATH/os_partitions_metadata.txt"
+        if [[ ! -s "$PARTITION_METADATA" ]]; then
+            LOGE "Target super partition metadata is missing for A115F"
+            exit 1
+        fi
+        EVAL "cp -a \"$PARTITION_METADATA\" \"$WORK_DIR/configs/target_os_partitions_metadata.txt\"" || exit 1
+    fi
 }
 
 COPY_TARGET_KERNEL()

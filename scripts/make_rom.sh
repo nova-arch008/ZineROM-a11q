@@ -114,6 +114,13 @@ if $BUILD_ROM; then
         LOG_STEP_OUT
     fi
 
+    if [[ "$TARGET_CODENAME" == "a115f" ]]; then
+        python3 "$SRC_DIR/scripts/validate_a115f_firmware_layout.py" \
+            "$FW_DIR/$TARGET_FIRMWARE_PATH" \
+            --config "$SRC_DIR/target/a115f/config.sh" \
+            --expected-version "$TARGET_FIRMWARE_VERSION" || exit 1
+    fi
+
     LOG_STEP_IN true "Creating work dir"
     "$SRC_DIR/scripts/internal/create_work_dir.sh" || exit 1
     LOG_STEP_OUT

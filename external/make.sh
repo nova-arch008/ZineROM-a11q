@@ -275,13 +275,30 @@ if $SAMLOADER; then
     BUILD "samloader" "$SRC_DIR/external/samloader" "${SAMLOADER_CMDS[@]}"
 fi
 if $SIGNAPK; then
+    # The standalone signapk submodule keeps symlinks into a full AOSP
+    # platform_build checkout. Use the same pinned AOSP sources vendored by
+    # android-tools, but do the substitution in a disposable copy so the
+    # checked-out submodule remains unchanged after success or failure.
+    SIGNAPK_TMP="$(mktemp -d "$OUT_DIR/signapk-build.XXXXXX")"
+    cleanup_signapk_tmp() { rm -rf "$SIGNAPK_TMP"; }
+    trap cleanup_signapk_tmp EXIT
+    cp -a "$SRC_DIR/external/signapk/." "$SIGNAPK_TMP/"
+    rm -f "$SIGNAPK_TMP/signapk/src/main/java/com/android/signapk/SignApk.java" \
+        "$SIGNAPK_TMP/signapk/src/main/java/com/android/signapk/CountingOutputStream.java"
+    cp -a "$SRC_DIR/external/android-tools/vendor/build/tools/signapk/src/com/android/signapk/SignApk.java" \
+        "$SIGNAPK_TMP/signapk/src/main/java/com/android/signapk/SignApk.java"
+    cp -a "$SRC_DIR/external/android-tools/vendor/build/tools/signapk/src/com/android/signapk/CountingOutputStream.java" \
+        "$SIGNAPK_TMP/signapk/src/main/java/com/android/signapk/CountingOutputStream.java"
+
     SIGNAPK_CMDS=(
         "./gradlew build"
         "cp -a \"scripts/linux/signapk\" \"$TOOLS_DIR/bin\""
         "cp -a \"signapk/build/libs/signapk-all.jar\" \"$TOOLS_DIR/bin/signapk.jar\""
     )
 
-    BUILD "signapk" "$SRC_DIR/external/signapk" "${SIGNAPK_CMDS[@]}"
+    BUILD "signapk" "$SIGNAPK_TMP" "${SIGNAPK_CMDS[@]}"
+    cleanup_signapk_tmp
+    trap - EXIT
 fi
 
 exit 0

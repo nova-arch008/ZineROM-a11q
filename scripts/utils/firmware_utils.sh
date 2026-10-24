@@ -90,9 +90,16 @@ EXTRACT_FILE_FROM_TAR()
         EVAL "mv -f \"$FW_DIR/${MODEL}_${CSC}/$FILE.ext4\" \"$FW_DIR/${MODEL}_${CSC}/$FILE\"" || return 1
     elif FILE_EXISTS_IN_TAR "$TAR" "$FILE.lz4"; then
         LOG "- Extracting $FILE.lz4..."
-        EVAL "tar xf \"$TAR\" -C \"$FW_DIR/${MODEL}_${CSC}\" \"$FILE.lz4\"" || return 1
         LOG "- Decompressing $FILE.lz4..."
-        EVAL "lz4 -d --rm \"$FW_DIR/${MODEL}_${CSC}/$FILE.lz4\" \"$FW_DIR/${MODEL}_${CSC}/$FILE\"" || return 1
+        if [[ "$FILE" == "super.img" ]]; then
+            if ! (set -o pipefail; tar -xOf "$TAR" "$FILE.lz4" | lz4 -dc > "$FW_DIR/${MODEL}_${CSC}/$FILE"); then
+                rm -f "$FW_DIR/${MODEL}_${CSC}/$FILE"
+                return 1
+            fi
+        else
+            EVAL "tar xf \"$TAR\" -C \"$FW_DIR/${MODEL}_${CSC}\" \"$FILE.lz4\"" || return 1
+            EVAL "lz4 -d --rm \"$FW_DIR/${MODEL}_${CSC}/$FILE.lz4\" \"$FW_DIR/${MODEL}_${CSC}/$FILE\"" || return 1
+        fi
     fi
 
     return 0
@@ -142,6 +149,8 @@ GET_LATEST_FIRMWARE()
 PARSE_FIRMWARE_STRING()
 {
     local STRING="$1"
+    IMEI=""
+    SERIAL_NO=""
 
     if [ ! "$STRING" ]; then
         LOGE "Firmware value cannot be empty"
@@ -165,6 +174,23 @@ PARSE_FIRMWARE_STRING()
 
     local THIRD
     THIRD="$(cut -d "/" -f 3 -s <<< "$STRING")"
+    # Reproducible imports may pin an AP build instead of a device IMEI/SN.
+    # Accept it only when it exactly matches the pinned AP version for this
+    # model/CSC; normal FUS lookups still require a real IMEI or serial number.
+    if [ -n "${SAMFW_PINNED_FIRMWARES:-}" ]; then
+        local ENTRY KEY VALUE PINNED_AP
+        while IFS= read -r ENTRY; do
+            [[ "$ENTRY" == *=* ]] || continue
+            KEY="${ENTRY%%=*}"
+            [[ "$KEY" == "$MODEL/$CSC" ]] || continue
+            VALUE="${ENTRY#*=}"
+            PINNED_AP="${VALUE%%/*}"
+            if [[ "$THIRD" == "$PINNED_AP" ]]; then
+                return 0
+            fi
+        done <<< "$SAMFW_PINNED_FIRMWARES"
+    fi
+
     if [ ! "$THIRD" ]; then
         LOGE "No IMEI/SN value found in \"$STRING\""
         return 1
