@@ -45,7 +45,7 @@ if start in text and end in text:
     before, rest = text.split(start, 1)
     _, after = rest.split(end, 1)
     text = before + "    # A11 kernel lacks donor-only camera/NNAPI cgroups.\n" + end + after
-elif start in text or end in text:
+elif start in text or (end in text and "A11 kernel lacks donor-only camera/NNAPI cgroups." not in text):
     raise SystemExit("Unexpected partial donor camera/NNAPI cgroup block")
 
 # Kernel 4.9 on the A11 exposes legacy binder character devices, not binderfs.
@@ -56,7 +56,7 @@ if binder_start in text and binder_end in text:
     before, rest = text.split(binder_start, 1)
     _, after = rest.split(binder_end, 1)
     text = before + "    # A11 kernel 4.9 uses legacy binder device nodes; binderfs is unsupported.\n\n" + binder_end + after
-elif binder_start in text or binder_end in text:
+elif binder_start in text or (binder_end in text and "A11 kernel 4.9 uses legacy binder device nodes; binderfs is unsupported." not in text):
     raise SystemExit("Unexpected partial binderfs block")
 
 path.write_text(text)
@@ -64,4 +64,26 @@ print(f"Patched A11 schedtune and legacy binder compatibility in {path}")
 PY
 fi
 
-LOG "A115F boot-first patch stage: no extra blobs or properties applied"
+# Android 15 linkerconfig reads the vendor's ro.vndk.version. The A11 vendor
+# is VNDK 31, while the A05s donor only supplies VNDK 33; without the matching
+# v31 APEX linkerconfig aborts with "SANITIZER_DEFAULT_VENDOR is not defined".
+TARGET_FW_LABEL="$(cut -d "/" -f 1 <<< "$TARGET_FIRMWARE")_$(cut -d "/" -f 2 <<< "$TARGET_FIRMWARE")"
+A11_VNDK31_SOURCE="$FW_DIR/$TARGET_FW_LABEL/system/system/apex/com.android.vndk.current.apex"
+A11_VNDK33_DEST="$WORK_DIR/system/system/system_ext/apex/com.android.vndk.v33.apex"
+A11_VNDK31_DEST="$WORK_DIR/system/system/system_ext/apex/com.android.vndk.v31.apex"
+if [ -f "$A11_VNDK31_SOURCE" ] && unzip -p "$A11_VNDK31_SOURCE" apex_manifest.pb | grep -aFq 'com.android.vndk.v31'; then
+    DELETE_FROM_WORK_DIR "system" "system/system_ext/apex/com.android.vndk.v33.apex"
+    cp -p "$A11_VNDK31_SOURCE" "$A11_VNDK31_DEST"
+    if ! grep -Fq 'system/system_ext/apex/com.android.vndk.v31.apex ' "$WORK_DIR/configs/fs_config-system"; then
+        printf '%s\n' 'system/system_ext/apex/com.android.vndk.v31.apex 0 0 644 capabilities=0x0' \
+            >> "$WORK_DIR/configs/fs_config-system"
+    fi
+    LOG "Replaced donor VNDK 33 APEX with target-matched A11 VNDK 31 APEX"
+elif [ -f "$A11_VNDK31_DEST" ] && unzip -p "$A11_VNDK31_DEST" apex_manifest.pb | grep -aFq 'com.android.vndk.v31'; then
+    LOG "Target-matched VNDK 31 APEX is already staged"
+else
+    LOGE "Target firmware VNDK 31 APEX is missing or has an unexpected manifest"
+    return 1
+fi
+
+LOG "A115F boot-first compatibility patches applied"
