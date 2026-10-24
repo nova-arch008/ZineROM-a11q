@@ -78,6 +78,10 @@ if [ -f "$A11_VNDK31_SOURCE" ] && unzip -p "$A11_VNDK31_SOURCE" apex_manifest.pb
         printf '%s\n' 'system/system_ext/apex/com.android.vndk.v31.apex 0 0 644 capabilities=0x0' \
             >> "$WORK_DIR/configs/fs_config-system"
     fi
+    if ! grep -Fq '/system/system_ext/apex/com\.android\.vndk\.v31\.apex ' "$WORK_DIR/configs/file_context-system"; then
+        printf '%s\n' '/system/system_ext/apex/com\.android\.vndk\.v31\.apex u:object_r:system_file:s0' \
+            >> "$WORK_DIR/configs/file_context-system"
+    fi
     LOG "Replaced donor VNDK 33 APEX with target-matched A11 VNDK 31 APEX"
 elif [ -f "$A11_VNDK31_DEST" ] && unzip -p "$A11_VNDK31_DEST" apex_manifest.pb | grep -aFq 'com.android.vndk.v31'; then
     LOG "Target-matched VNDK 31 APEX is already staged"
