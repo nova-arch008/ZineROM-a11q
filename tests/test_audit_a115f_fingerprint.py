@@ -51,6 +51,20 @@ class AuditA115FFingerprintTests(unittest.TestCase):
         self.assertTrue(any("fingerprint.rc" in item for item in services))
         self.assertIn("bin/hw/android.hardware.biometrics.fingerprint-service", binaries)
 
+    def test_reports_vndk_property_and_apex_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            system = Path(directory) / "system"
+            (system / "apex").mkdir(parents=True)
+            (system / "build.prop").write_text(
+                "ro.vndk.version=30\nro.build.version.sdk=31\n", encoding="utf-8"
+            )
+            apex = system / "apex/com.android.vndk.current.apex"
+            with zipfile.ZipFile(apex, "w") as archive:
+                archive.writestr("apex_manifest.pb", b"name\\x00com.android.vndk.v30\\x00")
+            properties, apexes = AUDIT.system_vndk_inventory(system)
+        self.assertTrue(any("ro.vndk.version=30" in item for item in properties))
+        self.assertTrue(any("com.android.vndk.v30" in item for item in apexes))
+
 
 if __name__ == "__main__":
     unittest.main()

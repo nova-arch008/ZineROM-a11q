@@ -2,6 +2,12 @@ name: Build ZineROM One UI 7 (Galaxy A11)
 
 on:
   workflow_dispatch:
+    inputs:
+      audit_only:
+        description: "Only audit source/target fingerprint and VNDK firmware inputs"
+        required: false
+        type: boolean
+        default: false
   push:
     branches:
       - manus/a115f-build-once
@@ -109,20 +115,25 @@ jobs:
             --donor-framework out/fw/SM-A057F_TUR/system/system/framework/framework.jar \
             --target-vendor out/fw/SM-A115F_MWD/vendor \
             --source-config unica/configs/qssi.sh \
-            --target-config target/a115f/config.sh
+            --target-config target/a115f/config.sh \
+            --source-system out/fw/SM-A057F_TUR/system/system \
+            --target-system out/fw/SM-A115F_MWD/system/system
 
       - name: Build ROM
+        if: ${{ inputs.audit_only != true }}
         run: |
           source ./buildenv.sh ${{ matrix.target }}
           ./scripts/make_rom.sh
 
       - name: Verify ZIP
+        if: ${{ inputs.audit_only != true }}
         run: |
           test -s out/ZineROM_OneUI7_A115F-Port-A057F.zip
           python3 scripts/validate_a115f_zip.py out/ZineROM_OneUI7_A115F-Port-A057F.zip
           sha256sum out/ZineROM_OneUI7_A115F-Port-A057F.zip
 
       - name: Upload private ZIP artifact
+        if: ${{ inputs.audit_only != true }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ZineROM_OneUI7_A115F-Port-A057F-${{ github.run_number }}

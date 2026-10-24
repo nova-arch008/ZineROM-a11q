@@ -61,12 +61,40 @@ def vendor_fingerprint_inventory(vendor_root: Path) -> tuple[list[str], list[str
     return manifest_entries, init_services, sorted(set(binaries))
 
 
+def system_vndk_inventory(system_root: Path) -> tuple[list[str], list[str]]:
+    properties: list[str] = []
+    for prop_file in (system_root / "build.prop", system_root / "etc/prop.default"):
+        if not prop_file.is_file():
+            continue
+        for line in prop_file.read_text(errors="replace").splitlines():
+            if re.match(r"^(ro\.vndk\.version|ro\.vndk\.lite|ro\.board\.api_level|ro\.build\.version\.sdk|ro\.product\.first_api_level)=", line):
+                properties.append(f"{prop_file.relative_to(system_root)}: {line}")
+
+    apexes: list[str] = []
+    apex_dir = system_root / "apex"
+    if apex_dir.is_dir():
+        for path in sorted(apex_dir.glob("com.android.vndk*.apex")):
+            try:
+                with zipfile.ZipFile(path) as archive:
+                    manifest = archive.read("apex_manifest.pb")
+                strings = sorted({value.decode("ascii", errors="ignore") for value in ASCII_RUN.findall(manifest)})
+                apex_ids = [value for value in strings if "com.android.vndk" in value]
+                apexes.append(f"{path.name}: manifest={','.join(apex_ids) or '(id not found)'}")
+            except (OSError, KeyError, zipfile.BadZipFile) as exc:
+                apexes.append(f"{path.name}: unreadable manifest ({exc})")
+    if not apexes:
+        apexes.append(f"No com.android.vndk*.apex files found under {apex_dir}")
+    return properties, apexes
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Audit A115F port fingerprint framework and stock vendor HAL.")
     parser.add_argument("--donor-framework", required=True, type=Path)
     parser.add_argument("--target-vendor", required=True, type=Path)
     parser.add_argument("--source-config", required=True, type=Path)
     parser.add_argument("--target-config", required=True, type=Path)
+    parser.add_argument("--source-system", required=True, type=Path)
+    parser.add_argument("--target-system", required=True, type=Path)
     args = parser.parse_args()
 
     try:
@@ -105,6 +133,16 @@ def main() -> int:
             print("  (no matching entries found)")
     if not manifest or any(item.startswith("MISSING:") for item in manifest):
         print("WARNING: inspect stock target VINTF manually; no fingerprint HAL entry was confirmed.")
+
+    for label, system_root in (("donor", args.source_system), ("target", args.target_system)):
+        properties, apexes = system_vndk_inventory(system_root)
+        print(f"\n{label.title()} system: {system_root}")
+        print("VNDK/API properties:")
+        for item in properties or ["(not found in inspected build.prop files)"]:
+            print(f"  {item}")
+        print("VNDK APEX manifests:")
+        for item in apexes:
+            print(f"  {item}")
     return 0
 
 
