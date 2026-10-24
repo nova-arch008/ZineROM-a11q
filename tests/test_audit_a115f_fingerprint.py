@@ -54,15 +54,18 @@ class AuditA115FFingerprintTests(unittest.TestCase):
     def test_reports_vndk_property_and_apex_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             system = Path(directory) / "system"
-            (system / "apex").mkdir(parents=True)
-            (system / "build.prop").write_text(
+            nested_apex = system / "system/system_ext/apex"
+            nested_apex.mkdir(parents=True)
+            (system / "vendor").mkdir(parents=True)
+            (system / "vendor/build.prop").write_text(
                 "ro.vndk.version=30\nro.build.version.sdk=31\n", encoding="utf-8"
             )
-            apex = system / "apex/com.android.vndk.current.apex"
+            apex = nested_apex / "com.android.vndk.current.apex"
             with zipfile.ZipFile(apex, "w") as archive:
-                archive.writestr("apex_manifest.pb", b"name\\x00com.android.vndk.v30\\x00")
+                archive.writestr("apex_manifest.pb", b"name:com.android.vndk.v30")
             properties, apexes = AUDIT.system_vndk_inventory(system)
         self.assertTrue(any("ro.vndk.version=30" in item for item in properties))
+        self.assertTrue(any("system_ext/apex/com.android.vndk.current.apex" in item for item in apexes))
         self.assertTrue(any("com.android.vndk.v30" in item for item in apexes))
 
 

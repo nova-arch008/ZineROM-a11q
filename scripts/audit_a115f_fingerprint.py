@@ -9,7 +9,7 @@ from pathlib import Path
 
 
 ASCII_RUN = re.compile(rb"[\x20-\x7e]{4,}")
-INTERESTING = ("fingerprint", "touch", "settings=")
+SENSOR_CONFIG_TOKENS = ("side", "rear", "optical", "ultrasonic", "google_touch")
 
 
 def framework_candidates(jar_path: Path) -> list[str]:
@@ -24,7 +24,8 @@ def framework_candidates(jar_path: Path) -> list[str]:
             dex = archive.read(name)
             for raw in ASCII_RUN.findall(dex):
                 value = raw.decode("ascii", errors="ignore").strip()
-                if any(token in value.lower() for token in INTERESTING):
+                lower = value.lower()
+                if "settings=" in lower and any(token in lower for token in SENSOR_CONFIG_TOKENS):
                     candidates.add(value)
     return sorted(candidates)
 
@@ -63,27 +64,25 @@ def vendor_fingerprint_inventory(vendor_root: Path) -> tuple[list[str], list[str
 
 def system_vndk_inventory(system_root: Path) -> tuple[list[str], list[str]]:
     properties: list[str] = []
-    for prop_file in (system_root / "build.prop", system_root / "etc/prop.default"):
-        if not prop_file.is_file():
-            continue
+    prop_files = sorted(set(system_root.rglob("build.prop")) | set(system_root.rglob("prop.default")))
+    for prop_file in prop_files:
         for line in prop_file.read_text(errors="replace").splitlines():
             if re.match(r"^(ro\.vndk\.version|ro\.vndk\.lite|ro\.board\.api_level|ro\.build\.version\.sdk|ro\.product\.first_api_level)=", line):
                 properties.append(f"{prop_file.relative_to(system_root)}: {line}")
 
     apexes: list[str] = []
-    apex_dir = system_root / "apex"
-    if apex_dir.is_dir():
-        for path in sorted(apex_dir.glob("com.android.vndk*.apex")):
-            try:
-                with zipfile.ZipFile(path) as archive:
-                    manifest = archive.read("apex_manifest.pb")
-                strings = sorted({value.decode("ascii", errors="ignore") for value in ASCII_RUN.findall(manifest)})
-                apex_ids = [value for value in strings if "com.android.vndk" in value]
-                apexes.append(f"{path.name}: manifest={','.join(apex_ids) or '(id not found)'}")
-            except (OSError, KeyError, zipfile.BadZipFile) as exc:
-                apexes.append(f"{path.name}: unreadable manifest ({exc})")
+    apex_paths = sorted(system_root.rglob("com.android.vndk*.apex"))
+    for path in apex_paths:
+        try:
+            with zipfile.ZipFile(path) as archive:
+                manifest = archive.read("apex_manifest.pb")
+            strings = sorted({value.decode("ascii", errors="ignore") for value in ASCII_RUN.findall(manifest)})
+            apex_ids = [value for value in strings if "com.android.vndk" in value]
+            apexes.append(f"{path.relative_to(system_root)}: manifest={','.join(apex_ids) or '(id not found)'}")
+        except (OSError, KeyError, zipfile.BadZipFile) as exc:
+            apexes.append(f"{path.relative_to(system_root)}: unreadable manifest ({exc})")
     if not apexes:
-        apexes.append(f"No com.android.vndk*.apex files found under {apex_dir}")
+        apexes.append(f"No com.android.vndk*.apex files found under {system_root}")
     return properties, apexes
 
 
@@ -104,12 +103,12 @@ def main() -> int:
         return 2
 
     print(f"Donor framework: {args.donor_framework}")
-    print("Fingerprint-related DEX strings:")
+    print("Fingerprint sensor-config strings in donor DEX:")
     if candidates:
         for value in candidates[:100]:
             print(f"  {value}")
         if len(candidates) > 100:
-            print(f"  ... {len(candidates) - 100} additional strings omitted")
+            print(f"  ... {len(candidates) - 100} additional sensor config strings omitted")
     else:
         print("  (no matching strings found)")
 
