@@ -4,7 +4,9 @@
 TARGET_NAME="Galaxy A11"
 TARGET_CODENAME="a115f"
 TARGET_ASSERT_MODEL="SM-A115F"
-TARGET_FIRMWARE="SM-A115F/INS/A115FXXS6CWK2"
+# Device logs report sales code INS. MWD is only the FUS source region: it returns
+# the same pinned A115F AP/CSC/CP/BL tuple below. No MWD CSC package is flashed.
+TARGET_FIRMWARE="SM-A115F/MWD/A115FXXS6CWK2"
 TARGET_FIRMWARE_VERSION="A115FXXS6CWK2/A115FOJM6CWK1/A115FXXS6CWK1/A115FXXS6CWK2"
 TARGET_EXTRA_FIRMWARES=()
 # Stock target is Android 12 / One UI 4 Core; donor system is Android 15.

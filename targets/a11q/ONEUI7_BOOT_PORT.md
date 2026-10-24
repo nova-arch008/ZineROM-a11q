@@ -6,7 +6,7 @@ This branch is intended for an experimental One UI 7 / Android 15 port for `SM-A
 
 The earlier statement that the exact A115F stock-package gate was satisfied locally was incorrect and is withdrawn. The inspected workspace contains an A05s donor Odin archive under `out/odin/SM-A057F_TUR`, but it contains no A115F target archive, no extracted A115F `vendor`/`odm`/`super`/`boot`/`dtbo` images, no assembled target work directory, and no flashable ROM ZIP. The donor firmware also has not been freshly revalidated during this audit.
 
-The target config and importer now pin firmware to `SM-A115F/INS/A115FXXS6CWK2`, matching the sales code in the supplied device logs. Availability of this exact historical INS FUS tuple has not yet been verified locally. The importer must download and validate the exact AP/CSC/CP/BL components before building; if the exact tuple is unavailable, stop and resolve the firmware pin rather than substituting EGY or another A115 variant.
+The supplied device logs report sales code `INS`, but the first CI attempt showed that the importer hardcoded an INS FUS lookup and Samloader could not parse its history response. A metadata-only Samloader-rs 2.2.0 query for `SM-A115F/MWD` returned the exact pinned tuple `A115FXXS6CWK2/A115FOJM6CWK1/A115FXXS6CWK1/A115FXXS6CWK2`. The target config now uses MWD only as the firmware download/source region; it does not change the device sales code, and no MWD CSC tar is flashed. The exact archive still has to download and pass member, embedded-MD5, model, tuple, and target-layout checks.
 
 ## Correct hardware/framework split
 
@@ -16,10 +16,10 @@ The A05s page from Samsung identifies a Snapdragon 680 processor, whereas this r
 
 ## Build gates
 
-1. Verify the device's exact target CSC/build and obtain the matching official A115F package. Record its archive and Odin payload hashes.
+1. Confirm the physical device is `SM-A115F` and record its sales code/build. Retrieve the A115F package through MWD only because FUS metadata resolves there to the exact pinned AP/CSC/CP/BL tuple; do not flash the regional CSC tar. Record archive and Odin payload hashes.
 2. Extract the A115F super inventory, vendor-side partition trees, `fs_config`/`file_context`, boot and DTBO. The new firmware-layout check must confirm the configured super group/size, every target-side logical partition, a target VINTF manifest, and a declared Keymaster/KeyMint HAL.
 3. Compare the Android 15 framework compatibility requirements against the A115F vendor manifest/services and review fstab, encryption, Keymaster/TEE and SELinux. Passing inventory checks alone does not prove compatibility.
 4. Package every target-side partition listed by the target `super` metadata, while replacing only the donor system/product components and applying the configured `system_ext` merge. The ZIP validator must reject missing target partition payloads or a group-size mismatch.
 5. Build and statically validate the ZIP, then test it only on the exact SM-A115F with a recoverable stock path. Boot-animation success requires a real device observation and logs; a generated ZIP is not evidence of boot success.
 
-The current local environment is not at those gates. No firmware download, ROM build, or device flash was performed in this continuation.
+The first remote workflow downloaded/extracted the A05s donor but failed before importing target firmware because the importer hardcoded INS. After confirming the exact tuple via MWD metadata, the importer is being corrected to derive model/region/AP from target config. No target archive has yet passed validation, no ROM ZIP has been built, and no device flash or boot test has occurred.

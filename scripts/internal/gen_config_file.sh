@@ -85,7 +85,8 @@ fi
 #
 #   [SOURCE/TARGET]_FIRMWARE
 #     String containing the source/target device firmware to use in the format of "Model number/CSC/IMEI".
-#     IMEI number is necessary to fetch the firmware from FUS, alternatively the device serial number can be used.
+#     For target-specific pinned imports, the third component may instead be the AP build when an exact
+#     TARGET_FIRMWARE_VERSION tuple is set; that path does not use an IMEI or change the device sales code.
 #
 #   TARGET_FIRMWARE_VERSION
 #     Optional exact AP/CSC/CP/BL version tuple used by target-specific import and validation gates; defaults to "none".

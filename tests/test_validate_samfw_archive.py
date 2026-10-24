@@ -135,6 +135,13 @@ class ValidateSamfwArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(VALIDATOR.ValidationError, "unexpected file"):
                 VALIDATOR.validate_archive(str(path), MODEL, VERSION)
 
+    def test_a115f_importer_uses_target_firmware_config(self) -> None:
+        importer = (ROOT / "scripts/import_samfw_firmware.sh").read_text(encoding="utf-8")
+        target_config = (ROOT / "target/a115f/config.sh").read_text(encoding="utf-8")
+        self.assertIn('TARGET_FIRMWARE="SM-A115F/MWD/A115FXXS6CWK2"', target_config)
+        self.assertIn("read -r TARGET_MODEL TARGET_CSC TARGET_AP_VERSION", importer)
+        self.assertNotIn('TARGET_CSC="INS"', importer)
+
     def test_rejects_malformed_version_string(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "firmware.zip"
