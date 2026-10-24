@@ -116,6 +116,56 @@ VERIFY_EXISTING_LOGICAL_PARTITION_FIT()
     done
 }
 
+FILTER_A115F_TRAILING_DISCARD()
+{
+    [[ "$TARGET_CODENAME" == "a115f" ]] || return 0
+    $TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE || return 0
+
+    local PARTITION="$1"
+    local TRANSFER_LIST="$2"
+    local CAPACITY_VAR="TARGET_EXISTING_${PARTITION^^}_SIZE"
+    local CAPACITY="${!CAPACITY_VAR:-}"
+
+    if ! [[ "$CAPACITY" =~ ^[0-9]+$ ]]; then
+        LOGE "Existing capacity for $PARTITION is not configured; refusing to filter erase operations"
+        return 1
+    fi
+
+    python3 - "$TRANSFER_LIST" "$CAPACITY" "$PARTITION" <<'PY'
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+capacity_blocks = int(sys.argv[2]) // 4096
+partition = sys.argv[3]
+lines = path.read_text().splitlines()
+if len(lines) < 4:
+    raise SystemExit(f"Invalid transfer list for {partition}: missing header")
+image_blocks = int(lines[1])
+kept = lines[:4]
+removed = []
+
+for line in lines[4:]:
+    if not line.startswith("erase "):
+        kept.append(line)
+        continue
+    fields = line.split(maxsplit=1)
+    values = [int(value) for value in fields[1].split(",")]
+    if len(values) < 3 or values[0] != len(values) - 1 or values[0] % 2:
+        raise SystemExit(f"Invalid erase command for {partition}: {line}")
+    ranges = list(zip(values[1::2], values[2::2]))
+    if any(start < image_blocks for start, _ in ranges):
+        raise SystemExit(f"Refusing to remove erase intersecting the {partition} image: {line}")
+    if any(start >= end or end > capacity_blocks for start, end in ranges):
+        raise SystemExit(f"Erase range exceeds existing {partition} capacity: {line}")
+    removed.append(line)
+
+if removed:
+    path.write_text("\n".join(kept) + "\n")
+    print(f"Filtered trailing discard-only erase for {partition}: {'; '.join(removed)}")
+PY
+}
+
 CREATE_ROM_ZIP()
 {
     local STORED_LIST="$OUT_DIR/stored.txt"
@@ -613,6 +663,7 @@ while IFS= read -r f; do
 
     LOG "- Converting $PARTITION.img to $PARTITION.new.dat"
     EVAL "img2sdat -o \"$TMP_DIR\" \"$f\"" || exit 1
+    FILTER_A115F_TRAILING_DISCARD "$PARTITION" "$TMP_DIR/$PARTITION.transfer.list" || exit 1
     rm -f "$f"
 
     COMPRESSION_LEVEL=0
