@@ -13,9 +13,16 @@ command -v samloader >/dev/null || { echo "samloader executable is required" >&2
 SOURCE_MODEL="SM-A057F"
 SOURCE_CSC="TUR"
 SOURCE_VERSION="A057FXXUFDZH2/A057FOJMFDZH2/A057FXXUFDZH2/A057FXXUFDZH2"
-TARGET_MODEL="SM-A115F"
-TARGET_CSC="INS"
+IFS='/' read -r TARGET_MODEL TARGET_CSC TARGET_AP_VERSION <<< "${TARGET_FIRMWARE:?Target config must pin model/CSC/AP}"
 TARGET_VERSION="${TARGET_FIRMWARE_VERSION:?Target config must pin the exact A115F firmware tuple}"
+if [[ "$TARGET_MODEL" != "${TARGET_ASSERT_MODEL:?Target config must assert the A115F model}" ]]; then
+    echo "Target firmware model $TARGET_MODEL does not match TARGET_ASSERT_MODEL=$TARGET_ASSERT_MODEL" >&2
+    exit 1
+fi
+if [[ ! "$TARGET_CSC" =~ ^[A-Z0-9]{3}$ ]] || [[ "$TARGET_AP_VERSION" != "${TARGET_VERSION%%/*}" ]]; then
+    echo "Target firmware model/CSC/AP does not match the pinned target version tuple" >&2
+    exit 1
+fi
 
 export SAMFW_PINNED_FIRMWARES="${SOURCE_MODEL}/${SOURCE_CSC}=${SOURCE_VERSION}
 ${TARGET_MODEL}/${TARGET_CSC}=${TARGET_VERSION}"
