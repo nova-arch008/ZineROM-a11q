@@ -19,12 +19,9 @@ TARGET_INCLUDE_PATCHED_VBMETA=false
 TARGET_KEEP_ORIGINAL_SIGN=false
 TARGET_SUPER_PARTITION_SIZE=4324327424
 TARGET_SUPER_GROUP_SIZE=4320133120
-# Keep the stock logical partition extents; do not rewrite super metadata.
-TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE=true
-TARGET_EXISTING_SYSTEM_SIZE=3315875840
-TARGET_EXISTING_VENDOR_SIZE=575578112
-TARGET_EXISTING_PRODUCT_SIZE=397549568
-TARGET_EXISTING_ODM_SIZE=4349952
+# Rebuild logical-partition metadata inside the existing super block device.
+# This redistributes logical extents only; it does not change PIT/physical partitions.
+TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE=false
 TARGET_HAS_SYSTEM_EXT=false
 # Snapdragon 450 / Adreno 506 / 60 Hz low-end target defaults.
 TARGET_AUDIO_SUPPORT_ACH_RINGTONE=false

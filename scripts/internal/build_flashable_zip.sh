@@ -119,15 +119,19 @@ VERIFY_EXISTING_LOGICAL_PARTITION_FIT()
 FILTER_A115F_TRAILING_DISCARD()
 {
     [[ "$TARGET_CODENAME" == "a115f" ]] || return 0
-    $TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE || return 0
 
     local PARTITION="$1"
     local TRANSFER_LIST="$2"
-    local CAPACITY_VAR="TARGET_EXISTING_${PARTITION^^}_SIZE"
-    local CAPACITY="${!CAPACITY_VAR:-}"
+    local CAPACITY
+    if $TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE; then
+        local CAPACITY_VAR="TARGET_EXISTING_${PARTITION^^}_SIZE"
+        CAPACITY="${!CAPACITY_VAR:-}"
+    else
+        CAPACITY="$(GET_IMAGE_SIZE "$TMP_DIR/$PARTITION.img")" || return 1
+    fi
 
     if ! [[ "$CAPACITY" =~ ^[0-9]+$ ]]; then
-        LOGE "Existing capacity for $PARTITION is not configured; refusing to filter erase operations"
+        LOGE "Capacity for $PARTITION is not known; refusing to filter erase operations"
         return 1
     fi
 

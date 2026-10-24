@@ -36,12 +36,12 @@ In recovery choose **Advanced → ADB Sideload → Swipe to Start** first. The Z
 
 Copy the ZIP to a FAT32/exFAT microSD card or USB-OTG drive. In recovery choose **Install**, select the external storage, and flash the ZIP. If recovery cannot mount the external device, use ADB sideload instead.
 
-10. Do not flash any Live Blur, AI, camera, audio, repartitioner, or random vendor patch after the first test. The boot-first ZIP keeps the current logical partition layout, does not rewrite super metadata, and is only intended to test the boot chain, display/touch, ADB, and SystemServer. Google Play Services is omitted in this test build to fit the existing product partition.
+10. Do not flash any Live Blur, AI, camera, audio, repartitioner, or random vendor patch after the first test. This build updates the logical-partition metadata inside the existing `super` block device so `system` can fit; it does not alter PIT or physical partition boundaries. It is only intended to test the boot chain, display/touch, ADB, and SystemServer. Google Play Services is omitted in this test build.
 11. After installation, reboot system and wait several minutes on the first boot. If it loops, return to recovery and collect the logs in `BOOT_LOGGING.md` before changing anything else.
 
 ## Why this ZIP should not format data automatically
 
-A recovery ZIP that formats data automatically can destroy the user's backup and can make diagnosis harder. The A115F boot-first installer does not resize or repartition super and does not automatically format data; data formatting remains a deliberate manual recovery step after a backup.
+A recovery ZIP that formats data automatically can destroy the user's backup and can make diagnosis harder. The A115F boot-first installer does not alter physical partitions or PIT and does not automatically format data. It does rebuild the logical partition layout inside `super`; data formatting remains a deliberate manual recovery step after a backup.
 
 ## If the phone shows “System has been destroyed” or “System Broken”
 
