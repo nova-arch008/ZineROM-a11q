@@ -411,6 +411,10 @@ STORE_OS_PARTITION_METADATA()
             exit 1
         fi
 
+        if [[ "${TARGET_CODENAME:-}" == "a115f" && "${MODEL:-}" == "SM-A115F" ]]; then
+            printf '%s\n' "$LPDUMP" > "$FW_DIR/${MODEL}_${CSC}/super_lpdump.txt"
+        fi
+
         local GROUP_NAME
         GROUP_NAME="$(grep -F "Group: " <<< "$LPDUMP" | tr -d " " | cut -d ":" -f 2 | sed -e "s/_a$//" -e "s/_b$//" | sort -u)"
 

@@ -119,6 +119,26 @@ jobs:
             --source-system out/fw/SM-A057F_TUR \
             --target-system out/fw/SM-A115F_MWD
 
+      - name: Audit A115F boot chain, vendor ABI, and partition layout
+        run: |
+          set -o pipefail
+          mkdir -p out
+          python3 scripts/audit_a115f_boot.py out/fw/SM-A115F_MWD | tee out/a115f-boot-audit.txt
+
+      - name: Upload private A115F boot audit
+        if: ${{ inputs.audit_only == true }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: ZineROM-A115F-boot-audit-${{ github.run_number }}
+          path: |
+            out/a115f-boot-audit.txt
+            out/fw/SM-A115F_MWD/os_partitions_metadata.txt
+            out/fw/SM-A115F_MWD/super_lpdump.txt
+            out/fw/SM-A115F_MWD/boot.img_metadata.txt
+            out/fw/SM-A115F_MWD/dtbo.img_metadata.txt
+          if-no-files-found: warn
+          retention-days: 90
+
       - name: Build ROM
         if: ${{ inputs.audit_only != true }}
         run: |
