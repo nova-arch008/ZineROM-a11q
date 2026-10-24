@@ -23,4 +23,45 @@ if [ -f "$SYSTEM_EXT_MAPPING" ]; then
     done
 fi
 
+ANDROID_INIT_RC="$WORK_DIR/system/system/etc/init/hw/init.rc"
+if [ -f "$ANDROID_INIT_RC" ]; then
+    python3 - "$ANDROID_INIT_RC" <<'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+text = path.read_text()
+
+# The A11's 4.9 schedtune driver has a hard limit of five boost groups.
+# Drop donor-only audio-app/camera-daemon/nnapi-hal groups and their
+# util-clamp groups; those are not required for Android's core boot.
+text = "\n".join(
+    line for line in text.split("\n")
+    if "/dev/stune/audio-app" not in line
+)
+start = "    # Create a cpu group for NNAPI HAL processes"
+end = "    # Create blkio group and apply initial settings."
+if start in text and end in text:
+    before, rest = text.split(start, 1)
+    _, after = rest.split(end, 1)
+    text = before + "    # A11 kernel lacks donor-only camera/NNAPI cgroups.\n" + end + after
+elif start in text or end in text:
+    raise SystemExit("Unexpected partial donor camera/NNAPI cgroup block")
+
+# Kernel 4.9 on the A11 exposes legacy binder character devices, not binderfs.
+# ueventd.rc already assigns permissions for /dev/binder{,hwbinder,vndbinder}.
+binder_start = "    # Mount binderfs\n"
+binder_end = "    mkdir /mnt/secure 0700 root root"
+if binder_start in text and binder_end in text:
+    before, rest = text.split(binder_start, 1)
+    _, after = rest.split(binder_end, 1)
+    text = before + "    # A11 kernel 4.9 uses legacy binder device nodes; binderfs is unsupported.\n\n" + binder_end + after
+elif binder_start in text or binder_end in text:
+    raise SystemExit("Unexpected partial binderfs block")
+
+path.write_text(text)
+print(f"Patched A11 schedtune and legacy binder compatibility in {path}")
+PY
+fi
+
 LOG "A115F boot-first patch stage: no extra blobs or properties applied"
