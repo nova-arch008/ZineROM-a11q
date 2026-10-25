@@ -68,11 +68,37 @@ fi
 # is VNDK 31, while the A05s donor only supplies VNDK 33; without the matching
 # v31 APEX linkerconfig aborts with "SANITIZER_DEFAULT_VENDOR is not defined".
 TARGET_FW_LABEL="$(cut -d "/" -f 1 <<< "$TARGET_FIRMWARE")_$(cut -d "/" -f 2 <<< "$TARGET_FIRMWARE")"
-A11_VNDK31_SOURCE="$FW_DIR/$TARGET_FW_LABEL/system/system/apex/com.android.vndk.current.apex"
+# Diagnostic A/B only: restore the stock A115F Keymaster readiness helper and
+# its small 32-bit Keystore2/KeyMint dependencies, which the A057F donor omits.
+# This does not alter /data encryption, fstab, the target vendor, or kernel.
+for A11_KEYMASTER_FILE in \
+    "system/bin/wait_for_keymaster" \
+    "system/etc/init/wait_for_keymaster.rc" \
+    "system/lib/android.system.keystore2-V1-ndk_platform.so" \
+    "system/lib/android.security.maintenance-ndk_platform.so" \
+    "system/lib/libkeymint_support.so" \
+    "system/lib/android.hardware.security.keymint-V1-ndk_platform.so" \
+    "system/lib/android.hardware.security.secureclock-V1-ndk_platform.so"; do
+    ADD_TO_WORK_DIR "$FW_DIR/$TARGET_FW_LABEL" "system" "$A11_KEYMASTER_FILE"
+done
+LOG "Added stock A115F Keymaster wait helper and 32-bit dependencies for diagnostic A/B test"
+
+# The donor init.rc has no class_start default, and merely installing this
+# default-class service does not execute it. Block the target's late fstab
+# mount until the stock helper confirms the Keymaster device is ready.
+A11_TARGET_INIT_RC="$WORK_DIR/vendor/etc/init/hw/init.target.rc"
+if [ ! -f "$A11_TARGET_INIT_RC" ]; then
+    LOGE "A115F target init file is missing: $A11_TARGET_INIT_RC"
+    return 1
+fi
+python3 "$SRC_DIR/scripts/patch_a115f_init.py" "$A11_TARGET_INIT_RC" || return 1
+
+# A115F stock firmware may not ship a system image; allow a verified local APEX.
+A11_VNDK31_SOURCE="${A11_VNDK31_APEX_SOURCE:-$FW_DIR/$TARGET_FW_LABEL/system/system/apex/com.android.vndk.current.apex}"
 A11_VNDK33_DEST="$WORK_DIR/system/system/system_ext/apex/com.android.vndk.v33.apex"
 A11_VNDK31_DEST="$WORK_DIR/system/system/system_ext/apex/com.android.vndk.v31.apex"
 if [ -f "$A11_VNDK31_SOURCE" ] && unzip -p "$A11_VNDK31_SOURCE" apex_manifest.pb | grep -aFq 'com.android.vndk.v31'; then
-    DELETE_FROM_WORK_DIR "system" "system/system_ext/apex/com.android.vndk.v33.apex"
+    DELETE_FROM_WORK_DIR "system" "system/system/system_ext/apex/com.android.vndk.v33.apex"
     cp -p "$A11_VNDK31_SOURCE" "$A11_VNDK31_DEST"
     if ! grep -Fq 'system/system_ext/apex/com.android.vndk.v31.apex ' "$WORK_DIR/configs/fs_config-system"; then
         printf '%s\n' 'system/system_ext/apex/com.android.vndk.v31.apex 0 0 644 capabilities=0x0' \

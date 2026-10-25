@@ -4,6 +4,7 @@
 TARGET_NAME="Galaxy A11"
 TARGET_CODENAME="a115f"
 TARGET_ASSERT_MODEL="SM-A115F"
+TARGET_ASSERT_BOOTLOADER="A115FXXS6CWK2"
 # Device logs report sales code INS. MWD is only the FUS source region: it returns
 # the same pinned A115F AP/CSC/CP/BL tuple below. No MWD CSC package is flashed.
 TARGET_FIRMWARE="SM-A115F/MWD/A115FXXS6CWK2"

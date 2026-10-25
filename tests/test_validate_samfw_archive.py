@@ -142,6 +142,20 @@ class ValidateSamfwArchiveTests(unittest.TestCase):
         self.assertIn("read -r TARGET_MODEL TARGET_CSC TARGET_AP_VERSION", importer)
         self.assertNotIn('TARGET_CSC="INS"', importer)
 
+    def test_a115f_imports_stock_system_for_keymaster_diagnostic(self) -> None:
+        importer = (ROOT / "scripts/import_samfw_firmware.sh").read_text(encoding="utf-8")
+        target_patch = (ROOT / "target/a115f/patches/miscs/customize.sh").read_text(encoding="utf-8")
+        self.assertIn("target) set -- system vendor ;;", importer)
+        self.assertIn('EXTRACT_PARTITIONS="system.img odm.img', importer)
+        self.assertIn('EXTRACT_REQUIRED_PARTITIONS="vendor system"', importer)
+        for path in (
+            "system/bin/wait_for_keymaster",
+            "system/etc/init/wait_for_keymaster.rc",
+            "system/lib/android.system.keystore2-V1-ndk_platform.so",
+            "system/lib/libkeymint_support.so",
+        ):
+            self.assertIn(path, target_patch)
+
     def test_rejects_malformed_version_string(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "firmware.zip"

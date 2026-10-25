@@ -4,7 +4,7 @@ The first test ZIP must not depend on decrypted `/data`. A115F recovery may show
 
 ## Safety and prerequisites
 
-This procedure is for `SM-A115F` only. Keep the complete stock `A115FXXS6CWK2` package and a working Download Mode path available. Unlocking the bootloader and formatting data can erase the phone. Back up personal data first. Do not flash the ZIP on an A115M, A115U, M11, or another A115 variant.
+This test ZIP is guarded for model `SM-A115F` and the exact Binary 6 bootloader `A115FXXS6CWK2`. Keep the complete matching stock package and a working Download Mode restore path available. Before installing, confirm recovery reports `getprop ro.boot.em.model` as `SM-A115F` and `getprop ro.boot.bootloader` as `A115FXXS6CWK2`; the updater also rejects any different or missing value. Unlocking the bootloader and formatting data can erase the phone. Back up personal data first. Do not flash the ZIP on another A115 variant or bootloader build.
 
 The A11 Snapdragon TWRP guidance documents the following sequence: unlock the bootloader, disable AVB with `vbmeta_disabled.tar`, flash the A11 TWRP TAR through Odin, disable encryption with the recovery `multidisabler`, and format data when required. See the original A11 recovery thread before using any recovery or vbmeta file:
 

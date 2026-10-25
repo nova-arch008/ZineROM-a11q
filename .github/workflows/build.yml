@@ -11,6 +11,7 @@ on:
   push:
     branches:
       - manus/a115f-build-once
+      - manus/a115f-vendor-fingerprint
 
 permissions:
   contents: read

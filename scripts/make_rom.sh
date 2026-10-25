@@ -103,7 +103,11 @@ if $BUILD_ROM; then
     [ -d "$APKTOOL_DIR" ] && rm -rf "$APKTOOL_DIR"
     [ -f "$WORK_DIR/.completed" ] && rm -f "$WORK_DIR/.completed"
 
-    if [ ! -f "$FW_DIR/$SOURCE_FIRMWARE_PATH/.extracted" ] || [ ! -f "$FW_DIR/$TARGET_FIRMWARE_PATH/.extracted" ]; then
+    if [[ "$TARGET_CODENAME" == "a115f" ]]; then
+        LOG_STEP_IN true "Importing pinned A115F firmware"
+        "$SRC_DIR/scripts/import_samfw_firmware.sh" || exit 1
+        LOG_STEP_OUT
+    elif [ ! -f "$FW_DIR/$SOURCE_FIRMWARE_PATH/.extracted" ] || [ ! -f "$FW_DIR/$TARGET_FIRMWARE_PATH/.extracted" ]; then
         if [ ! -f "$ODIN_DIR/$SOURCE_FIRMWARE_PATH/.downloaded" ] || [ ! -f "$ODIN_DIR/$TARGET_FIRMWARE_PATH/.downloaded" ]; then
             LOG_STEP_IN true "Downloading required firmwares"
             "$SRC_DIR/scripts/download_fw.sh" || exit 1

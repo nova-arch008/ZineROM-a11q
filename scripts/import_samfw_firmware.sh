@@ -64,7 +64,7 @@ extracted_outputs_complete() {
     local dir="$FW_DIR/${model}_${csc}"
     case "$label" in
         source) set -- system product ;;
-        target) set -- vendor ;;
+        target) set -- system vendor ;;
         *) return 1 ;;
     esac
     for part in "$@"; do
@@ -93,6 +93,8 @@ import_one() {
     local label="$1" model="$2" csc="$3" version="$4"
     local target_dir="$ODIN_DIR/${model}_${csc}"
     local zip_path="$OUT_DIR/tmp/${model}_${csc}_samloader.zip"
+    local resume_marker="${zip_path}.request"
+    local resume_key="${model}/${csc}=${version}"
     local downloaded_marker="$target_dir/.downloaded"
     local extracted_marker="$FW_DIR/${model}_${csc}/.extracted"
     local reuse_odin=false
@@ -118,14 +120,31 @@ import_one() {
         check_download_space
         rm -rf "$target_dir"
         mkdir -p "$target_dir"
-        rm -f "$zip_path" "$zip_path.part"
+        if [[ -e "$zip_path.part" ]]; then
+            if [[ -f "$resume_marker" ]] && [[ "$(cat "$resume_marker")" == "$resume_key" ]]; then
+                echo "Resuming matching interrupted firmware download: $model/$csc"
+            else
+                echo "Discarding partial firmware download without a matching request marker: $model/$csc" >&2
+                rm -f "$zip_path" "$zip_path.part" "$resume_marker"
+            fi
+        else
+            rm -f "$zip_path" "$resume_marker"
+        fi
+        printf '%s' "$resume_key" > "$resume_marker.tmp"
+        mv -f "$resume_marker.tmp" "$resume_marker"
         echo "Downloading pinned $label firmware from Samsung FUS: $model/$csc"
-        samloader download --model "$model" --region "$csc" --version "$version" \
-            --threads 8 --out-file "$zip_path"
+        if ! samloader download --model "$model" --region "$csc" --version "$version" \
+                --threads 8 --out-file "$zip_path"; then
+            echo "Firmware download was interrupted; the matching partial file is retained for retry." >&2
+            return 1
+        fi
 
-        verify_archive_members "$zip_path" "$model" "$version"
+        if ! verify_archive_members "$zip_path" "$model" "$version"; then
+            rm -f "$zip_path" "$zip_path.part" "$resume_marker"
+            return 1
+        fi
         unzip -q -o "$zip_path" -d "$target_dir"
-        rm -f "$zip_path" "$zip_path.part"
+        rm -f "$zip_path" "$zip_path.part" "$resume_marker"
         verify_odin_md5 "$target_dir"
         required_odin_payloads_present "$target_dir" "$model" "$version" || {
             echo "Extracted Odin archive is missing one or more pinned payloads" >&2
@@ -145,8 +164,8 @@ EXTRACT_REQUIRED_PARTITIONS="system product" \
 "$SRC_DIR/scripts/extract_fw.sh" --ignore-target
 
 import_one "target" "$TARGET_MODEL" "$TARGET_CSC" "$TARGET_VERSION"
-EXTRACT_PARTITIONS="odm.img odm_dlkm.img system_dlkm.img vendor.img vendor_dlkm.img" \
-EXTRACT_REQUIRED_PARTITIONS="vendor" \
+EXTRACT_PARTITIONS="system.img odm.img odm_dlkm.img system_dlkm.img vendor.img vendor_dlkm.img" \
+EXTRACT_REQUIRED_PARTITIONS="vendor system" \
 EXTRACT_REQUIRED_KERNEL_IMAGES="boot.img dtbo.img" \
 "$SRC_DIR/scripts/extract_fw.sh" --ignore-source
 

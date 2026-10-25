@@ -426,6 +426,10 @@ GENERATE_UPDATER_SCRIPT()
 
         PRINT_HEADER
 
+        if [ -n "${TARGET_ASSERT_BOOTLOADER:-}" ]; then
+            printf 'getprop("ro.boot.bootloader") == "%s" || abort("E3005: This package requires bootloader %s.");\n' "$TARGET_ASSERT_BOOTLOADER" "$TARGET_ASSERT_BOOTLOADER"
+        fi
+
         # https://android.googlesource.com/platform/build/+/refs/tags/android-15.0.0_r1/tools/releasetools/common.py#4007
         echo -e "\n# --- Start patching dynamic partitions ---\n\n"
         if $TARGET_SKIP_DYNAMIC_PARTITIONS_UPDATE; then

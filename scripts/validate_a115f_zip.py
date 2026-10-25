@@ -54,12 +54,14 @@ def validate(zip_path: Path, config: dict[str, object]) -> list[str]:
     codename = str(config.get("TARGET_CODENAME", ""))
     model_value = str(config.get("TARGET_ASSERT_MODEL", ""))
     models = [model for model in model_value.split(":") if model]
+    bootloader = str(config.get("TARGET_ASSERT_BOOTLOADER", ""))
     group_size = config.get("TARGET_SUPER_GROUP_SIZE")
     super_size = config.get("TARGET_SUPER_PARTITION_SIZE")
     group_name = str(config.get("TARGET_SUPER_GROUP_NAME", ""))
     has_system_ext = config.get("TARGET_HAS_SYSTEM_EXT")
     require(codename == "a115f", f"Unexpected target codename in config: {codename!r}")
-    require("SM-A115F" in models, f"SM-A115F is not asserted by target config: {models!r}")
+    require(models == ["SM-A115F"], f"SM-A115F is not asserted as the sole target model: {models!r}")
+    require(bootloader == "A115FXXS6CWK2", f"Target config must pin Binary 6 bootloader A115FXXS6CWK2, found {bootloader!r}")
     require(isinstance(group_size, int) and group_size > 0, "TARGET_SUPER_GROUP_SIZE is missing or invalid")
     require(isinstance(super_size, int) and super_size > 0, "TARGET_SUPER_PARTITION_SIZE is missing or invalid")
     require(group_size <= super_size, "TARGET_SUPER_GROUP_SIZE exceeds TARGET_SUPER_PARTITION_SIZE")
@@ -114,6 +116,11 @@ def validate(zip_path: Path, config: dict[str, object]) -> list[str]:
         require(
             re.search(r'getprop\("ro\.boot\.em\.model"\)\s*==\s*"SM-A115F"', updater) is not None,
             "Updater does not assert exact model SM-A115F via ro.boot.em.model",
+        )
+        require(
+            re.search(rf'getprop\("ro\.boot\.bootloader"\)\s*==\s*"{re.escape(bootloader)}"', updater)
+            is not None,
+            "Updater does not assert exact Binary 6 bootloader A115FXXS6CWK2 via ro.boot.bootloader",
         )
         for token in (
             "update_dynamic_partitions",
@@ -258,7 +265,7 @@ def validate(zip_path: Path, config: dict[str, object]) -> list[str]:
 
         return [
             f"ZIP CRC and members: PASS ({len(names)} unique members)",
-            f"Target assertions/metadata: PASS ({codename}, {', '.join(models)})",
+            f"Target assertions/metadata: PASS ({codename}, {', '.join(models)}, {bootloader})",
             f"Payload/transfer-list coverage: PASS ({', '.join(sorted(payloads))})",
             "Target firmware partition preservation: PASS ("
             + ", ".join(sorted(target_side_partitions))

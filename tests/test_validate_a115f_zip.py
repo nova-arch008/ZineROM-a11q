@@ -17,6 +17,7 @@ SPEC.loader.exec_module(VALIDATOR)
 CONFIG = {
     "TARGET_CODENAME": "a115f",
     "TARGET_ASSERT_MODEL": "SM-A115F",
+    "TARGET_ASSERT_BOOTLOADER": "A115FXXS6CWK2",
     "TARGET_SUPER_PARTITION_SIZE": 4324327424,
     "TARGET_SUPER_GROUP_SIZE": 4320133120,
     "TARGET_SUPER_GROUP_NAME": "qti_dynamic_partitions",
@@ -43,6 +44,7 @@ resize product 100
 
 BASE_UPDATER = '''
 getprop("ro.boot.em.model") == "SM-A115F" || abort("wrong model");
+getprop("ro.boot.bootloader") == "A115FXXS6CWK2" || abort("wrong bootloader");
 assert(update_dynamic_partitions(package_extract_file("dynamic_partitions_op_list")));
 block_image_update(map_partition("system"), "system.transfer.list", "system.new.dat.br", "system.patch.dat");
 block_image_update(map_partition("vendor"), "vendor.transfer.list", "vendor.new.dat.br", "vendor.patch.dat");
@@ -199,6 +201,31 @@ class ValidateA115FZipTests(unittest.TestCase):
             path = self.make_zip(directory)
             with self.assertRaisesRegex(VALIDATOR.ValidationError, "not asserted"):
                 VALIDATOR.validate(path, wrong_config)
+
+    def test_rejects_multiple_device_models(self) -> None:
+        widened_config = dict(CONFIG, TARGET_ASSERT_MODEL="SM-A115F:SM-A115M")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(VALIDATOR.ValidationError, "sole target model"):
+                VALIDATOR.validate(self.make_zip(directory), widened_config)
+
+    def test_rejects_wrong_binary6_bootloader_pin(self) -> None:
+        wrong_config = dict(CONFIG, TARGET_ASSERT_BOOTLOADER="A115FXXS5CWK2")
+        with tempfile.TemporaryDirectory() as directory:
+            with self.assertRaisesRegex(VALIDATOR.ValidationError, "Binary 6 bootloader"):
+                VALIDATOR.validate(self.make_zip(directory), wrong_config)
+
+    def test_rejects_missing_binary6_bootloader_updater_guard(self) -> None:
+        updater = BASE_UPDATER.replace(
+            'getprop("ro.boot.bootloader") == "A115FXXS6CWK2" || abort("wrong bootloader");\n',
+            "",
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.make_zip(
+                directory,
+                {"META-INF/com/google/android/updater-script": updater.encode()},
+            )
+            with self.assertRaisesRegex(VALIDATOR.ValidationError, "exact Binary 6 bootloader"):
+                VALIDATOR.validate(path, CONFIG)
 
     def test_a115f_local_zip_builder_invokes_validator(self) -> None:
         builder = (ROOT / "scripts/internal/build_flashable_zip.sh").read_text(encoding="utf-8")

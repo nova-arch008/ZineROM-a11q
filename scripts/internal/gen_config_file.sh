@@ -129,6 +129,9 @@ fi
 #     Example:
 #       `TARGET_ASSERT_MODEL=("SM-A528B" "SM-A528N")`
 #
+#   TARGET_ASSERT_BOOTLOADER
+#     If set, the zip package requires an exact match with the `ro.boot.bootloader` prop.
+#
 #   TARGET_SINGLE_SYSTEM_IMAGE
 #     String containing the target device SSI, it must match the `ro.build.product` prop.
 #     Currently, only "qssi" is supported.
@@ -343,6 +346,11 @@ fi
         echo "TARGET_ASSERT_MODEL=\"$(IFS=":"; printf '%s' "${TARGET_ASSERT_MODEL[*]}")\""
     else
         echo "TARGET_ASSERT_MODEL=\"\""
+    fi
+    if [ -n "${TARGET_ASSERT_BOOTLOADER:-}" ]; then
+        echo "TARGET_ASSERT_BOOTLOADER=\"$TARGET_ASSERT_BOOTLOADER\""
+    else
+        echo "TARGET_ASSERT_BOOTLOADER=\"\""
     fi
     GET_BUILD_VAR "TARGET_FIRMWARE"
     GET_BUILD_VAR "TARGET_FIRMWARE_VERSION" "none"
