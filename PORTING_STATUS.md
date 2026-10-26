@@ -1,6 +1,6 @@
 # حالة مشروع One UI 7 على Galaxy A11 (SM-A115F)
 
-**آخر تحديث:** 2026-10-26، 13:10 +03:00
+**آخر تحديث:** 2026-10-26، 19:02 +03:00
 **الفرع البعيد:** `manus/a115f-vendor-fingerprint`
 **نسخة المصدر التي بُنيت واختُبرت في CI:** `190586c39cd86057887d7ae84a4631761ace7c54`
 **الجهاز المستهدف:** Samsung Galaxy A11 `SM-A115F`، Snapdragon 450، Binary 6 فقط (`A115FXXS6CWK2`)
@@ -27,9 +27,21 @@
 2. `pasted_content_2.txt` السابق كان سجل Recovery، لكن المرفق الأحدث بتاريخ 2026-10-26 (1,609 سطرًا) هو سجل kernel/init من محاولة Android: command line يحتوي `androidboot.boot_recovery=0` للطراز `SM-A115F` والـ bootloader `A115FXXS6CWK2`.
 3. التسلسل الأحدث يسجل عدة إخفاقات `qseecomd` بـ `scm_call` function `0x72000206` قرب 12.66–12.69 ثانية؛ ثم `security.fbe.fail_cause ... K00R` قرب 13.27 ثانية، وفشل `cryptfs enablefilecrypto` قرب 13.81 ثانية. عند 14.23 ثانية يعيد init تشغيل الجهاز إلى Recovery. لا يظهر panic صريح في نهاية الالتقاط.
 4. سجل TWRP اللاحق (`pasted_content.txt`) يعرض Android Rescue Party reason `--reason=enablefilecrypto_failedK00R`، بما يتوافق مع فشل FBE المسجل أثناء محاولة Android.
-5. لا يظهر نص `wait_for_keymaster` أو `exec_start` في السجل المتاح؛ لذلك لا يمكن تأكيد أن حاجز الترتيب نُفذ أو أن helper نجح. كما لا يوجد اسم/ SHA-256 للحزمة التي أنتجت السجل، فلا يمكن ربطه قطعًا بـ Release أو CI artifact.
+5. لا يظهر نص `wait_for_keymaster` أو `exec_start` في سجل kernel المتاح؛ لذلك لا يمكن تأكيد أن حاجز الترتيب نُفّذ. helper يكتب رسالتي `Waiting for Keymaster device` و`Keymaster device ready` إلى kernel log عندما يشغله init؛ غيابهما يرجح أن helper لم يعمل في هذه المحاولة، لكنه لا يثبت ذلك من دون ZIP SHA وسجل init كامل [1].
+6. المرفق الأحدث بتاريخ 2026-10-26 18:53 هو تعليمات المشروع، وليس سجل جهاز أو SHA جديدًا. سجل TWRP المذكور أعلاه كان مرفقًا في الجولة السابقة؛ لا تخلط بين الملفين لمجرد تطابق اسم المرفق.
 
 **الاستنتاج:** لدينا الآن دليل على أن محاولة Android بدأت ووصلت لمسار Keymaster/FBE ثم أعادت التشغيل إلى Recovery بسبب فشل تهيئة file-based encryption. إخفاق QSEE يسبق ذلك زمنيًا، لكنه وحده لا يثبت السبب الجذري الكامل. يلزم ربط السجل بـ ZIP محدد ومعرفة نتيجة helper قبل اختيار تعديل جديد.
+
+## تحقق تكميلي من init وملفات الأمان (2026-10-26)
+
+- في workdir للبناء، `/system/etc/init/hw/init.rc` يستورد ملف vendor حسب `ro.hardware=qcom`؛ `init.qcom.rc` يستورد `init.target.rc`. لذلك `exec_start wait_for_keymaster` موجود في ملف init يدخل مسار التحميل، ويقع قبل `mount_all ... --late` في action `late-fs`.
+- خدمة Keymaster 4.0 الهدف تبدأ من `on init` ضمن `early_hal`. خدمة QSEECom HAL موجودة ضمن `class hal`، بينما qseecomd يظهر في السجل ويصدر أخطاء SCM. هذا يضعف فرضية أن المشكلة مجرد عدم بدء خدمة Keymaster مبكرًا، لكنه لا يثبت نجاح عمليات TA.
+- helper المنقول ملف ARM32، ورسالتاه المتوقعتان غير موجودتين في سجل kernel المرفق. الاحتمالان المفتوحان: الحزمة المجربة لا تتضمن الحاجز، أو أن helper لم يُشغّل/لم تُلتقط رسائله. لا يمكن التمييز دون SHA-256 أو سجل logcat/init للحزمة نفسها.
+- ملف `wait_for_keymaster.rc` المنقول مطابق لتعريف AOSP Android 12؛ لذا لم أضف `oneshot` أو `disabled` كتعديل غير مدعوم. تعريف AOSP نفسه لا يحتويهما [2].
+- يبيّن السجل نجاح تركيب قسمي FAT على `mmcblk0p67` و`mmcblk0p68` عند 11.868 و11.876 ثانية. ويتوافق ذلك مع دخولي APNHLOS وmodem في fstab؛ لا يوجد دليل هنا على فشل تركيب firmware قبل أخطاء QSEE.
+- يفشل تركيب `/oem` كـ ext4 على `mmcblk0p60` عند 12.142 ثانية، ويعرض dump لكتلة superblock كلها أصفار، قبل QSEE بنحو نصف ثانية. init الهدف stock يتضمن أمر التركيب نفسه، ولم يظهر OEM image ضمن ملفات الاستخراج. لا يثبت ذلك أن الخطأ سبب QSEE/FBE؛ اعتبره تحذيرًا ثانويًا غير محسوم، ولا تغيّر القسم أو أمر تركيبه بناءً عليه.
+- تظهر أيضًا رسالة `klmkd_debug_init` عن تعذر إنشاء `/proc/lmkd_debug` قرب 1.36 ثانية، ثم يستمر boot. لا يوجد ما يربطها بفشل FBE الحالي.
+- تعريف Android init يوضح أن `exec_start` ينتظر انتهاء الخدمة، وأن `oneshot` فقط يمنع إعادة تشغيل الخدمة بعد خروجها؛ لكن تعريف AOSP للـ helper لا يضع `oneshot`. لذلك لم أعدّل سلوك الخدمة بلا دليل على أنه سبب المشكلة [3].
 
 ## نتائج تدقيق المكونات السبعة
 
@@ -54,12 +66,13 @@
 - SHA-256 لملف ROM ZIP الناتج عن هذا الـ run: `e9b2d93c52dd21a25570e712f067692ee97d2e334876236bea258482f7914292`.
 - اسم artifact في Actions: `ZineROM_OneUI7_A115F-Port-A057F-8`، بحجم خارجي `1,837,881,180` بايت. هذا الـ Action artifact **ليس Release عامًا** ولم يُختبر على الهاتف.
 - الـ Release العام ما زال بالـ SHA-256 `29384d92ba37f6603cf0dfe08eec027e4049e3781414ffc9d197479b3388e2e0`. لم أرفع build 8 إلى Release.
+- التوثيق الأحدث محفوظ في commit `879f9eaf3c15e9a29f05c7324b9ae05d5f42bfc0`. بدأ run [GitHub Actions #40352021725](https://github.com/nova-arch008/ZineROM-a11q/actions/runs/40352021725) لهذا الـ commit وهو `in_progress` عند آخر تحقق؛ لم ينتج عنه artifact مكتمل بعد.
 
 ## أكبر الموانع حسب الأولوية
 
-1. **P0 — Keymaster/QSEE/FBE runtime:** أحدث سجل يثبت QSEE SCM errors `0x72000206` تسبق `K00R` وفشل `enablefilecrypto` وإعادة التشغيل إلى Recovery.
+1. **P0 — Keymaster/QSEE/FBE runtime:** أحدث سجل يثبت QSEE SCM errors `0x72000206` تسبق `K00R` وفشل `enablefilecrypto` وإعادة التشغيل إلى Recovery. Firmware FAT mounts ناجحة؛ سبب SCM الوظيفي ما زال غير معروف.
 2. **P0 — ربط نتيجة التيستر بالحزمة الصحيحة:** لا نملك SHA-256/اسم ZIP الذي أنتج هذا السجل، ولا نعرف هل هو الـ Release العام أو artifact CI.
-3. **P1 — التحقق من readiness barrier:** لم يظهر trace واضح لـ `wait_for_keymaster`/`exec_start`؛ نحتاج سجل init/logcat للمحاولة نفسها.
+3. **P1 — التحقق من readiness barrier:** ملفات build تستورد init target الصحيح، لكن رسائل helper غائبة من سجل المحاولة. نحتاج ZIP SHA وسجل init/logcat للحزمة نفسها.
 4. **P1 — VINTF/runtime security:** لا يوجد `checkvintf` للمزيج النهائي، ولا دليل على نجاح إنشاء مفتاح FBE رغم ظهور فشل QSEE/Keystore2.
 5. **P1 — مخاطرة recovery/super:** إعادة كتابة dynamic-partition metadata مرتبة ساكنًا لكنها غير مختبرة على recovery الجهاز؛ لا PIT ولا تغييرات فيزيائية مسموحة.
 6. **P2 — سلامة provenance/reproducibility:** أضف لاحقًا hash SHA-256 موثقًا لملف firmware archive وسجل build provenance؛ MD5 الداخلي في Samsung/Odin مفيد لاكتشاف التلف لكنه ليس إثبات provenance تشفيريًا قويًا.
@@ -91,3 +104,9 @@
 - `target/a115f/FLASHING_A115F.md`
 - `target/a115f/BOOT_LOGGING.md`
 - `target/a115f/BOOT_PROGRESS.md` (ملاحظات تاريخية؛ هذا الملف هو ملخص الحالة الأحدث)
+
+## المراجع
+
+[1]: https://android.googlesource.com/platform/system/vold/+/android-12.0.0_r1/wait_for_keymaster.cpp "AOSP Android 12 wait_for_keymaster implementation"
+[2]: https://android.googlesource.com/platform/system/vold/+/android-12.0.0_r1/wait_for_keymaster.rc "AOSP Android 12 wait_for_keymaster service definition"
+[3]: https://android.googlesource.com/platform/system/core/+/android-12.0.0_r1/init/README.md "AOSP Android 12 init service semantics"
