@@ -1,6 +1,6 @@
 # حالة مشروع One UI 7 على Galaxy A11 (SM-A115F)
 
-**آخر تحديث:** 2026-10-26، 19:02 +03:00
+**آخر تحديث:** 2026-10-27، 13:58 +03:00
 **الفرع البعيد:** `manus/a115f-vendor-fingerprint`
 **نسخة المصدر التي بُنيت واختُبرت في CI:** `190586c39cd86057887d7ae84a4631761ace7c54`
 **الجهاز المستهدف:** Samsung Galaxy A11 `SM-A115F`، Snapdragon 450، Binary 6 فقط (`A115FXXS6CWK2`)
@@ -19,7 +19,7 @@
 - **تغطية التدقيق الساكن:** 7 من 7 مجالات مخططة = **100% من نطاق التدقيق الذي أُجري**؛ لا يعني ذلك اكتمال كل توافقات التشغيل.
 - **اختبارات وبناء commit `190586c`:** **نجاح CI**؛ 60/60 اختبارًا، بناء كامل، وفحوص ZIP ناجحة.
 - **مرحلة التشغيل المثبتة:** سجل Android يصل إلى محاولة تهيئة FBE ثم يعيد التشغيل إلى Recovery؛ لم يثبت الوصول إلى شعار Samsung أو Boot Animation أو Setup Wizard. لا يمكن ربطه بعد بـ ZIP محدد.
-- **تقييم الجاهزية لأول إقلاع:** لا يمكن استخراج نسبة احتمال موثوقة من السجل. السبب المباشر المسجل للعودة إلى Recovery هو FBE `K00R`، مع QSEE SCM failures سابقة؛ هوية الحزمة ونتيجة helper لا تزالان مجهولتين.
+- **تقييم الجاهزية لأول إقلاع:** Android userspace يصل إلى محاولة تهيئة FBE، لكن الجهاز يعود إلى Recovery بسبب `K00R`. لم يثبت الوصول إلى boot animation أو Setup Wizard، ولا يمكن ربط السجل بـ ZIP محدد أو إصدار نسبة نجاح موثوقة.
 
 ## أحدث المرفقات: ما تثبته وما لا تثبته
 
@@ -50,7 +50,7 @@
 | Kernel / boot / DTB / DTBO | الحزمة مبنية على مدخلات boot المستهدفة لـ A115F؛ مقارنة kernel وramdisk المعبّأين مع stock موثقة في التدقيق. النواة المستعملة stock A115F وليست kernel مخصصًا جرى بناؤه لهذا المشروع. | لم يُفك DTB/DTBO ويُتحقق مستقلًا من جدول overlays واختيار اللوحة لهذه الحزمة على الجهاز. لا يوجد boot test مطابق لـ SHA الحالي. donor A057F يستخدم boot-image layout أحدث، ولذلك لا ينبغي استبدال صور boot المستهدفة بصور المانح. |
 | Partition map / updater / fstab | قيمة super الفيزيائية في الإعدادات `4,324,327,424` بايت، ومجموعة `qti_dynamic_partitions` حدها `4,320,133,120` بايت. يذكر CI أن payload المجموعة `4,055,482,368` بايت، ضمن الحد. الـ updater يحرس `SM-A115F` و`A115FXXS6CWK2` ولا يحتوي أمر format data بحسب الفاحص. | الـ updater يعيد تكوين logical-partition metadata داخل super؛ قبول recovery الفعلي ومسارات by-name وخصائص recovery لم تُختبر على الجهاز. لا تغيّر PIT أو الأقسام الفيزيائية. |
 | Firmware / image assembly | الإعداد يثبت tuple هدف A115F `A115FXXS6CWK2/A115FOJM6CWK1/A115FXXS6CWK1/A115FXXS6CWK2`، ويبني system/vendor/product/odm مع ملفات boot المستهدفة. CI أنشأ ZIP صالحًا. | لا يوجد في التقرير hash موثّق لملف firmware archive الأصلي يربطه تشفيريًا بكل ملفات الاستخراج. وُجدت ملاحظة استخراجية: ملف `system_ext/etc/aconfig_flags.pb` لدى المانح حجمه صفر وبعض أدلة fs_config فارغة؛ target يدمج system_ext مع system، لذا هذه ملاحظة تحتاج متابعة وليست عطلًا مثبتًا. |
-| HAL / VINTF / ABI / FBE | vendor الهدف من جيل Android 12: SDK/VNDK 31، ويحتوي Keymaster HIDL 3.0/4.0 بنسخ ARM32. fstab الهدف يضبط `/data` على F2FS و`fileencryption=ice`. تم استيراد helper ومكتبات KeyMint/Keystore2 ذات 32-bit ضمن تشخيص الترتيب. | Android 15 donor أعلى API (35) ويقدم مصفوفات AIDL KeyMint، مقابل HIDL قديم في vendor. وجود المداخل لا يثبت وحده رفض VINTF، لكن لا توجد نتيجة `checkvintf` للمزيج النهائي؛ أداة `checkvintf` غير متاحة في بيئة التدقيق. نجاح QSEE/TEE وإنشاء مفتاح FBE وفتح `/data` غير مثبت. |
+| HAL / VINTF / ABI / FBE | vendor الهدف من جيل Android 12: SDK/VNDK 31، ويعلن Keymaster HIDL 4.0/default، وخدمة QTI تبدأ ضمن `early_hal`. تدقيق workdir وجد جسر Android 15 الرسمي `libkm_compat.so` و`libkm_compat_service.so` ومكتبات HIDL Keymaster 3/4؛ كما يبين مصدر Android 15 أن Keystore2 يطلب خدمة التوافق عند غياب AIDL KeyMint أصلي. لذلك اختلاف HIDL/AIDL وحده ليس دليلًا على غياب مسار التوافق. fstab الهدف يضبط `/data` على F2FS و`fileencryption=ice`. | لم يثبت أن جسر التوافق استُدعي بنجاح على الجهاز، ولا أن Keymaster/QSEE أنشأ مفتاح FBE أو فتح `/data`. لا توجد نتيجة `checkvintf` للمزيج النهائي؛ أداة `checkvintf` غير متاحة في بيئة التدقيق. تبقى أخطاء QSEE SCM و`K00R` هي العائق التشغيلي المباشر. |
 | Init / SELinux / permissions | patcher `scripts/patch_a115f_init.py` fail-closed وidempotent، ويُدرج `exec_start wait_for_keymaster` قبل `mount_all ... --late`. ملف workdir السابق أظهر الترتيب والـ helper labels/permissions المنقولة من stock. التغيير موجود في المصدر ودخل بناء commit الحالي. | لا يوجد log من ROM يثبت تنفيذ الخدمة، readiness، السماح عبر SELinux، أو نجاح Keymaster/QSEE؛ ترتيب المصدر لا يساوي نجاح runtime. |
 | Build / tests / CI | GitHub Actions run [40233035076](https://github.com/nova-arch008/ZineROM-a11q/actions/runs/40233035076) على SHA `190586c…` انتهى **success**. `Ran 60 tests` ثم `OK`. بناء ROM اكتمل، وفاحص ZIP أكد 22 عنصرًا، حارس `a115f / SM-A115F / A115FXXS6CWK2`، تغطية payload/transfer-list لأقسام odm/product/system/vendor، وسعة المجموعة. SHA-256 لحزمة ROM الناتجة: `18f579c0758134d4e5db6bf81d437f27403f7dcdf9d4586321944dd82993c3e5`. | خطوة fingerprint audit في workflow معلّمة `continue-on-error: true`، لذلك نجاح الـ job وحده لا يجعلها gate إلزامية. فاحص ZIP ساكن ولا يحاكي التفليش أو الإقلاع. لم تُجرَ مقارنة clean repeat-build مضبوطة. |
 | Tester bootloop / stage | السجل الأحدث يثبت محاولة Android بـ `boot_recovery=0`، ثم QSEE `0x72000206`، وFBE `K00R`، وفشل `enablefilecrypto`، وبعدها إعادة تشغيل init إلى Recovery. سجل TWRP اللاحق يؤكد Rescue Party بالسبب نفسه. | لا نملك SHA-256/اسم ZIP المجرب، ولا سجل init التفصيلي الذي يثبت تشغيل/نتيجة `wait_for_keymaster`. لا يثبت log وحده أن QSEE هو السبب الجذري الوحيد. |
@@ -70,10 +70,10 @@
 
 ## أكبر الموانع حسب الأولوية
 
-1. **P0 — Keymaster/QSEE/FBE runtime:** أحدث سجل يثبت QSEE SCM errors `0x72000206` تسبق `K00R` وفشل `enablefilecrypto` وإعادة التشغيل إلى Recovery. Firmware FAT mounts ناجحة؛ سبب SCM الوظيفي ما زال غير معروف.
+1. **P0 — Keymaster/QSEE/FBE runtime:** أحدث سجل يثبت QSEE SCM errors `0x72000206` تسبق `K00R` وفشل `enablefilecrypto` وإعادة التشغيل إلى Recovery. جسر AOSP Android 15 لـ Keymaster HIDL موجود في صورة البناء، لكن تشغيله ونجاح اتصاله بخدمة HIDL/TEE غير مثبتين. Firmware FAT mounts ناجحة؛ سبب SCM الوظيفي ما زال غير معروف.
 2. **P0 — ربط نتيجة التيستر بالحزمة الصحيحة:** لا نملك SHA-256/اسم ZIP الذي أنتج هذا السجل، ولا نعرف هل هو الـ Release العام أو artifact CI.
 3. **P1 — التحقق من readiness barrier:** ملفات build تستورد init target الصحيح، لكن رسائل helper غائبة من سجل المحاولة. نحتاج ZIP SHA وسجل init/logcat للحزمة نفسها.
-4. **P1 — VINTF/runtime security:** لا يوجد `checkvintf` للمزيج النهائي، ولا دليل على نجاح إنشاء مفتاح FBE رغم ظهور فشل QSEE/Keystore2.
+4. **P1 — VINTF/runtime security:** مسار توافق Keystore2 إلى HIDL Keymaster موجود ساكنًا، لكن لا يوجد `checkvintf` للمزيج النهائي ولا دليل runtime على نجاح الجسر أو إنشاء مفتاح FBE رغم ظهور فشل QSEE/Keystore2.
 5. **P1 — مخاطرة recovery/super:** إعادة كتابة dynamic-partition metadata مرتبة ساكنًا لكنها غير مختبرة على recovery الجهاز؛ لا PIT ولا تغييرات فيزيائية مسموحة.
 6. **P2 — سلامة provenance/reproducibility:** أضف لاحقًا hash SHA-256 موثقًا لملف firmware archive وسجل build provenance؛ MD5 الداخلي في Samsung/Odin مفيد لاكتشاف التلف لكنه ليس إثبات provenance تشفيريًا قويًا.
 
@@ -110,3 +110,5 @@
 [1]: https://android.googlesource.com/platform/system/vold/+/android-12.0.0_r1/wait_for_keymaster.cpp "AOSP Android 12 wait_for_keymaster implementation"
 [2]: https://android.googlesource.com/platform/system/vold/+/android-12.0.0_r1/wait_for_keymaster.rc "AOSP Android 12 wait_for_keymaster service definition"
 [3]: https://android.googlesource.com/platform/system/core/+/android-12.0.0_r1/init/README.md "AOSP Android 12 init service semantics"
+[4]: https://android.googlesource.com/platform/system/security/+/refs/heads/android15-release/keystore2/src/globals.rs "AOSP Android 15 Keystore2 KeyMint and legacy compatibility lookup"
+[5]: https://android.googlesource.com/platform/system/security/+/refs/heads/android15-release/keystore2/src/km_compat/Android.bp "AOSP Android 15 Keymaster compatibility bridge build dependencies"
