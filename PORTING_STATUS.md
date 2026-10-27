@@ -1,6 +1,6 @@
 # حالة مشروع One UI 7 على Galaxy A11 (SM-A115F)
 
-**آخر تحديث:** 2026-10-27، 13:58 +03:00
+**آخر تحديث:** 2026-10-27، 14:10 +03:00
 **الفرع البعيد:** `manus/a115f-vendor-fingerprint`
 **نسخة المصدر التي بُنيت واختُبرت في CI:** `190586c39cd86057887d7ae84a4631761ace7c54`
 **الجهاز المستهدف:** Samsung Galaxy A11 `SM-A115F`، Snapdragon 450، Binary 6 فقط (`A115FXXS6CWK2`)
@@ -8,18 +8,25 @@
 
 ## الخلاصة التنفيذية
 
-اكتمل تدقيق ساكن من سبعة مجالات مستقلة، وبُنيت نسخة المصدر الموجودة على commit `190586c` بنجاح في GitHub Actions. نجحت اختبارات المشروع الـ60، واكتمل بناء ROM، واجتاز ZIP فحوص البنية وحارس الطراز والـ bootloader وسعة dynamic partitions.
+بُني commit `190586c` سابقًا بنجاح في GitHub Actions، واجتاز 60 اختبارًا وفحوص ZIP الساكنة. تدقيق إضافي أكد أن ملفات جسر Android 15 إلى Keymaster HIDL وسياسة SELinux ومصفوفة VINTF الاختيارية موجودة أصلًا في workdir؛ لذلك لم أضف bridge مكررًا أو أغيّر FBE تخمينًا. أضفت الآن علامتي تشخيص في kernel log حول حاجز Keymaster، واجتاز المرشح 62 اختبارًا محليًا؛ بناء CI لم يكتمل بعد.
 
-هذا **لا يثبت أن الروم وصل إلى الشعار أو Setup Wizard**. لكن أحدث المرفقات تتضمن سجل محاولة Android (`androidboot.boot_recovery=0`) ثم فشل `enablefilecrypto`/`K00R` وإعادة تشغيل init إلى Recovery. لا يظهر فيه هل `wait_for_keymaster` نُفّذ، ولا SHA-256 للحزمة المجربة.
+هذا **لا يثبت أن الروم وصل إلى الشعار أو Setup Wizard**. السجل السابق يثبت محاولة Android ثم فشل `enablefilecrypto`/`K00R` وإعادة تشغيل init إلى Recovery. لا نملك SHA-256 للحزمة المجربة، ولم يثبت أن المشكلة حُلّت. المرشح الجديد تشخيصي فقط: علامتا kernel log ستبيّنان هل وصل init إلى حاجز `wait_for_keymaster` وعاد منه.
 
-**لم تُفلش أي أجهزة، ولم يُنشر Release جديد، ولم تُجرَ تغييرات مدمرة.** التعليمات الأخيرة تشترط موافقة صريحة قبل أي نشر أو إجراء تدميري؛ لذلك لم أستبدل ملف الـ Release العام بحزمة CI الأحدث.
+**لم تُفلش أي أجهزة، ولم يُنشر Release جديد، ولم تُجرَ تغييرات مدمرة.** لن أصف المرشح التشخيصي بأنه إصلاح FBE؛ سيُرفع رابط عام بعد اكتمال البناء والتحقق من ZIP والحارس فقط.
 
 ## مؤشرات التقدم المبنية على الأدلة
 
 - **تغطية التدقيق الساكن:** 7 من 7 مجالات مخططة = **100% من نطاق التدقيق الذي أُجري**؛ لا يعني ذلك اكتمال كل توافقات التشغيل.
-- **اختبارات وبناء commit `190586c`:** **نجاح CI**؛ 60/60 اختبارًا، بناء كامل، وفحوص ZIP ناجحة.
+- **الاختبارات:** المرشح الجديد اجتاز محليًا 62/62 اختبارًا وفحوص syntax/whitespace؛ أُجري أيضًا اختبار على نسخة مؤقتة من init الهدف وتأكد موضع العلامتين وعدم تكرارهما. انتظار CI للبناء الكامل والتحقق من ZIP.
 - **مرحلة التشغيل المثبتة:** سجل Android يصل إلى محاولة تهيئة FBE ثم يعيد التشغيل إلى Recovery؛ لم يثبت الوصول إلى شعار Samsung أو Boot Animation أو Setup Wizard. لا يمكن ربطه بعد بـ ZIP محدد.
 - **تقييم الجاهزية لأول إقلاع:** Android userspace يصل إلى محاولة تهيئة FBE، لكن الجهاز يعود إلى Recovery بسبب `K00R`. لم يثبت الوصول إلى boot animation أو Setup Wizard، ولا يمكن ربط السجل بـ ZIP محدد أو إصدار نسبة نجاح موثوقة.
+
+## المرشح التشخيصي التالي
+
+- التدقيق أكد وجود `libkm_compat.so` و`libkm_compat_service.so` واعتماداتهما، ووجود label `android.security.compat` مع سماح SELinux لتسجيله. خدمة هدف A115F تعلن Keymaster HIDL 4.0، ومصفوفة Android 15 تجعل AIDL KeyMint اختياريًا؛ لا يوجد نقص ساكن واضح يستدعي إضافة bridge أو HAL جديد.
+- أضيف إلى `scripts/patch_a115f_init.py` تسجيل `A115F_KEYMASTER_BARRIER_BEGIN` مباشرة قبل `exec_start wait_for_keymaster` و`A115F_KEYMASTER_BARRIER_COMPLETE` بعده. هذا تعديل تشخيصي محدود إلى init؛ لا يغيّر ترتيب ملفات التشفير، fstab، خدمات Keymaster/QSEE، firmware، kernel أو الأقسام.
+- الغرض هو أن يثبت سجل kernel إن كان الحاجز قد بدأ وانتهى. ظهور علامتيه لا يثبت نجاح QSEE أو إنشاء مفتاح FBE؛ يبقى ذلك بحاجة إلى logcat/اختبار الجهاز.
+- الاختبارات المحلية: 62/62 ناجحة، واختبار التكامل على init الهدف أكد ترتيب العلامات والحاجز قبل late mount. يجب انتظار GitHub Actions لبناء ROM وفحص ZIP. لا يُنشر أي ملف قبل نجاح هذين الفحصين.
 
 ## أحدث المرفقات: ما تثبته وما لا تثبته
 
@@ -112,3 +119,4 @@
 [3]: https://android.googlesource.com/platform/system/core/+/android-12.0.0_r1/init/README.md "AOSP Android 12 init service semantics"
 [4]: https://android.googlesource.com/platform/system/security/+/refs/heads/android15-release/keystore2/src/globals.rs "AOSP Android 15 Keystore2 KeyMint and legacy compatibility lookup"
 [5]: https://android.googlesource.com/platform/system/security/+/refs/heads/android15-release/keystore2/src/km_compat/Android.bp "AOSP Android 15 Keymaster compatibility bridge build dependencies"
+[6]: https://android.googlesource.com/platform/system/core/+/android-15.0.0_r1/init/README.md "AOSP Android 15 init write command"

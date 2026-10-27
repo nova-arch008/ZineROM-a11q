@@ -33,12 +33,16 @@ class PatchA115FInitTests(unittest.TestCase):
         self.assertTrue(changed)
         self.assertIn(
             "    # Mount RW partitions and /data.\n"
+            "    write /dev/kmsg A115F_KEYMASTER_BARRIER_BEGIN\n"
             "    exec_start wait_for_keymaster\n"
+            "    write /dev/kmsg A115F_KEYMASTER_BARRIER_COMPLETE\n"
             "    mount_all /vendor/etc/fstab.qcom --late\n",
             patched,
         )
         self.assertIn("    mount_all /vendor/etc/fstab.qcom --early\n", patched)
         self.assertEqual(patched.count("exec_start wait_for_keymaster"), 1)
+        self.assertEqual(patched.count("A115F_KEYMASTER_BARRIER_BEGIN"), 1)
+        self.assertEqual(patched.count("A115F_KEYMASTER_BARRIER_COMPLETE"), 1)
 
     def test_is_idempotent(self) -> None:
         once, first_changed = PATCHER.patch_init_text(self.init_text)
@@ -46,6 +50,25 @@ class PatchA115FInitTests(unittest.TestCase):
         self.assertTrue(first_changed)
         self.assertFalse(second_changed)
         self.assertEqual(once, twice)
+
+    def test_wraps_existing_wait_command_with_markers(self) -> None:
+        legacy = self.init_text.replace(
+            "    mount_all /vendor/etc/fstab.qcom --late\n",
+            "    exec_start wait_for_keymaster\n"
+            "    mount_all /vendor/etc/fstab.qcom --late\n",
+        )
+        patched, changed = PATCHER.patch_init_text(legacy)
+        self.assertTrue(changed)
+        self.assertIn(
+            "    write /dev/kmsg A115F_KEYMASTER_BARRIER_BEGIN\n"
+            "    exec_start wait_for_keymaster\n"
+            "    write /dev/kmsg A115F_KEYMASTER_BARRIER_COMPLETE\n"
+            "    mount_all /vendor/etc/fstab.qcom --late\n",
+            patched,
+        )
+        second, changed_again = PATCHER.patch_init_text(patched)
+        self.assertFalse(changed_again)
+        self.assertEqual(second, patched)
 
     def test_rejects_missing_or_ambiguous_mount_anchor(self) -> None:
         with self.assertRaisesRegex(PATCHER.InitPatchError, "found 0"):
@@ -58,6 +81,16 @@ class PatchA115FInitTests(unittest.TestCase):
         invalid = "on fs\n    " + PATCHER.MOUNT_ANCHOR + "\n"
         with self.assertRaisesRegex(PATCHER.InitPatchError, "not under an on late-fs"):
             PATCHER.patch_init_text(invalid)
+
+    def test_rejects_partial_keymaster_barrier(self) -> None:
+        partial = self.init_text.replace(
+            "    mount_all /vendor/etc/fstab.qcom --late\n",
+            "    write /dev/kmsg A115F_KEYMASTER_BARRIER_BEGIN\n"
+            "    exec_start wait_for_keymaster\n"
+            "    mount_all /vendor/etc/fstab.qcom --late\n",
+        )
+        with self.assertRaisesRegex(PATCHER.InitPatchError, "partial or duplicated"):
+            PATCHER.patch_init_text(partial)
 
     def test_file_patch_is_idempotent(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
