@@ -32,7 +32,11 @@
 3. جعل استبدال SAIV مشروطًا بوجود `system/saiv` في الشجرة المستخرجة. عند غيابه تُحذف نسخة donor-only ويُسجل التخطي بدل فشل build.
 4. إضافة اختبارات regression للحالتين: وجود SAIV الهدف وغيابه.
 
-نجحت **46 وحدة اختبار محلية**، وفحوص Python/Bash و`git diff --check`. هذه فحوص ثابتة وليست ZIP أو إثبات إقلاع. يجب تشغيل Workflow جديد لأن الإضافة إلى target `system` تزيد استهلاك المساحة والوقت، وللتأكد من أن بقية stock-blob patches تكتمل.
+نجحت **47 وحدة اختبار محلية**، وفحوص Python/Bash و`git diff --check`. هذه فحوص ثابتة وليست ZIP أو إثبات إقلاع. يجب تشغيل Workflow جديد لأن الإضافة إلى target `system` تزيد استهلاك المساحة والوقت، وللتأكد من أن بقية stock-blob patches تكتمل.
+
+## رؤية ملف البناء
+
+المستودع `nova-arch008/ZineROM-a11q` عام. ووفق توثيق GitHub، تنزيل artifacts متاح لمن لديه صلاحية قراءة المستودع؛ لذلك اسم الخطوة “private artifact” وحده لا يجعل الملف خاصًا. عُدّل workflow ليطلب من GitHub قيمة `.private` ويرفع artifact فقط إذا ثبت أن المستودع خاص، مع fail-closed إذا تعذر التحقق. في وضع المستودع الحالي سيُبنى ZIP ويُفحص على runner، لكن لن يُرفع artifact قابل للتنزيل. تغيير خصوصية المستودع أو وضع رابط عام يحتاج قرارًا منفصلًا، ولن يحدث تلقائيًا.
 
 ## ما بقي
 
@@ -45,3 +49,5 @@
 [3]: https://github.com/topjohnwu/samloader-rs/releases/tag/2.2.0 "Samloader-rs 2.2.0 المستخدم لاستعلام FUS"
 [4]: https://samfrew.com/download/Galaxy__A11____/6nm4/MWD/A115FXXS6CWK2/A115FOJM6CWK1 "فهرس firmware SM-A115F لمنطقة MWD"
 [5]: https://samfw.com/firmware/SM-A115F/PNG/A115FXXS6CWK2 "فهرس firmware SM-A115F للإقليم PNG"
+[6]: https://docs.github.com/actions/managing-workflow-runs/downloading-workflow-artifacts "GitHub: صلاحية تنزيل workflow artifacts"
+[7]: https://docs.github.com/rest/actions/artifacts "GitHub REST API: صلاحية الوصول إلى artifacts"

@@ -110,7 +110,21 @@ jobs:
           python3 scripts/validate_a115f_zip.py out/ZineROM_OneUI7_A115F-Port-A057F.zip
           sha256sum out/ZineROM_OneUI7_A115F-Port-A057F.zip
 
-      - name: Upload private ZIP artifact
+      - name: Check repository visibility
+        id: repository-visibility
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if private=$(gh api "repos/$GITHUB_REPOSITORY" --jq .private 2>/dev/null); then
+            echo "private=$private" >> "$GITHUB_OUTPUT"
+            echo "Repository private: $private"
+          else
+            echo "private=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not verify repository visibility; artifact upload will be skipped"
+          fi
+
+      - name: Upload ZIP artifact (private repositories only)
+        if: steps.repository-visibility.outputs.private == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: ZineROM_OneUI7_A115F-Port-A057F-${{ github.run_number }}
