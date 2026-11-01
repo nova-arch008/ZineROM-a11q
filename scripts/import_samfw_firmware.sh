@@ -64,7 +64,7 @@ extracted_outputs_complete() {
     local dir="$FW_DIR/${model}_${csc}"
     case "$label" in
         source) set -- system product ;;
-        target) set -- vendor ;;
+        target) set -- system vendor ;;
         *) return 1 ;;
     esac
     for part in "$@"; do
@@ -74,6 +74,9 @@ extracted_outputs_complete() {
     done
     if [[ "$label" == "target" ]]; then
         [[ -s "$dir/kernel/boot.img" && -s "$dir/kernel/dtbo.img" ]] || return 1
+        python3 "$SRC_DIR/scripts/validate_a115f_firmware_layout.py" \
+            "$dir" --config "$SRC_DIR/target/a115f/config.sh" \
+            --expected-version "$TARGET_VERSION" >/dev/null 2>&1 || return 1
     fi
 }
 
@@ -98,10 +101,14 @@ import_one() {
     local reuse_odin=false
 
     mkdir -p "$OUT_DIR/tmp"
-    if [[ -f "$extracted_marker" ]] && [[ "$(cat "$extracted_marker")" == "$version" ]] && \
-            extracted_outputs_complete "$label" "$model" "$csc"; then
-        echo "Already extracted matching $label firmware: $model/$csc"
-        return 0
+    if [[ -f "$extracted_marker" ]]; then
+        if [[ "$(cat "$extracted_marker")" == "$version" ]] && \
+                extracted_outputs_complete "$label" "$model" "$csc"; then
+            echo "Already extracted matching $label firmware: $model/$csc"
+            return 0
+        fi
+        echo "Discarding stale or incomplete extracted $label firmware cache: $model/$csc" >&2
+        rm -rf "$FW_DIR/${model}_${csc}"
     fi
 
     if [[ -f "$downloaded_marker" ]] && [[ "$(cat "$downloaded_marker")" == "$version" ]] && \
@@ -145,8 +152,8 @@ EXTRACT_REQUIRED_PARTITIONS="system product" \
 "$SRC_DIR/scripts/extract_fw.sh" --ignore-target
 
 import_one "target" "$TARGET_MODEL" "$TARGET_CSC" "$TARGET_VERSION"
-EXTRACT_PARTITIONS="odm.img odm_dlkm.img system_dlkm.img vendor.img vendor_dlkm.img" \
-EXTRACT_REQUIRED_PARTITIONS="vendor" \
+EXTRACT_PARTITIONS="system.img odm.img odm_dlkm.img system_dlkm.img vendor.img vendor_dlkm.img" \
+EXTRACT_REQUIRED_PARTITIONS="system vendor" \
 EXTRACT_REQUIRED_KERNEL_IMAGES="boot.img dtbo.img" \
 "$SRC_DIR/scripts/extract_fw.sh" --ignore-source
 

@@ -1,35 +1,47 @@
-# ملاحظات تعطل استيراد firmware لـA115F
+# ملاحظات تعطل استيراد وبناء firmware لـA115F
 
-## نتيجة أول تشغيل للـworkflow
+## 1. فشل FUS الأول وإصلاح مصدر التنزيل
 
-في GitHub Actions run `40117738481` نجح تنزيل واستخراج firmware المانح A05s، بما في ذلك `system` و`product` و`system_ext`. ثم توقف استيراد target A115F قبل استخراج أقسامه: حاول importer طلب `SM-A115F/INS` من Samsung FUS، وأعادت أداة Samloader-rs الخطأ `Info request invalid`، ثم انتهى الـjob برمز 101.[1] لم يبدأ `make_rom.sh`، ولم يُنشأ ZIP، ولم يحدث اختبار إقلاع.
+في أول GitHub Actions run (`40117738481`) نجح تنزيل واستخراج firmware المانح A05s، ثم حاول importer طلب `SM-A115F/INS` من Samsung FUS. أعادت أداة Samloader-rs الخطأ `Info request invalid` ولم يبدأ `make_rom.sh`.
 
-كشف التدقيق أن `scripts/import_samfw_firmware.sh` كان يثبت `TARGET_CSC="INS"` داخليًا بدل قراءة `TARGET_FIRMWARE` من إعداد الهدف؛ لذلك كان يتجاهل قيمة CSC الموجودة في config. أُزيل هذا التجاوز: importer يقرأ الموديل والمنطقة وAP من `TARGET_FIRMWARE`، ثم يتحقق من تطابق الموديل مع `TARGET_ASSERT_MODEL` وتطابق AP مع tuple المثبت.
+كان `scripts/import_samfw_firmware.sh` يثبت `TARGET_CSC="INS"` بدل قراءة إعداد target. أُزيل hardcode وصار importer يقرأ الموديل والمنطقة وAP من `TARGET_FIRMWARE` ويتحقق من تطابقه مع `TARGET_ASSERT_MODEL` والـtuple الكامل.
 
-## تحقق metadata من Samsung FUS
+استعلام metadata-only عبر Samloader-rs 2.2.0 أعاد من `SM-A115F/MWD` الـtuple التالي المطابق للإعداد:
 
-نُزّلت أداة Samloader-rs 2.2.0 بالـSHA-256 المثبت نفسه في workflow. استعلام `check-update` لا ينزّل firmware، وأعطى النتيجتين التاليتين:
+`A115FXXS6CWK2/A115FOJM6CWK1/A115FXXS6CWK1/A115FXXS6CWK2`
 
-- `SM-A115F/INS`: فشل Samloader في تحليل `history.xml`؛ لا يثبت هذا وحده أن firmware غير موجود.
-- `SM-A115F/MWD`: أعاد من FUS tuple كاملًا يطابق الإعداد حرفيًا: `A115FXXS6CWK2/A115FOJM6CWK1/A115FXXS6CWK1/A115FXXS6CWK2`.[2]
+تُستخدم MWD فقط كمصدر لتنزيل حزمة SM-A115F المطابقة. سجلات الهاتف تبقى INS ولا يجري تفليش CSC الخاص بـMWD.
 
-لذلك يستخدم config الآن MWD **كمنطقة مصدر لتنزيل حزمة A115F فقط**. سجلات الهاتف ما زالت تسجل sales code `INS`؛ لن تتغير قيمة الهاتف ولن يُفلش ملف CSC الخاص بـMWD. لا يزال تنزيل الحزمة الكاملة، فحص محتوياتها وMD5، واستخراج أقسام target مطلوبة لإثبات أن المصدر صالح فعليًا.
+## 2. نتيجة استيراد A115F وفشل بناء ROM
 
-يعرض SamFrew إصدار `A115FXXS6CWK2` ضمن MWD مع CSC `A115FOJM6CWK1`، بينما تعرض صفحة SamFW الإقليم PNG للإصدار نفسه لكن CSC مختلفًا `A115FPNG6CWK1`.[3][4] هذه فهارس طرف ثالث؛ اعتمد اختيار MWD على استجابة FUS metadata المطابقة، لا على أسماء المناطق وحدها.
+في CI run `40120489519`:
 
-الـfeeds العامة `version.xml` لـFUS أعادت HTTP 403 من Akamai لهذه البيئة في محاولات INS وMWD وPNG وEGY.[5][6][7][8] هذا الحجب لا يدل على عدم وجود firmware؛ اختبار `check-update` عبر Samloader-rs هو الذي أعطى نتيجة MWD أعلاه.
+- نُزّلت حزمة A115F من MWD، وطابقت أسماء payloads مكونات AP/CSC/CP/BL المثبتة.
+- تحقق embedded MD5 لخمسة ملفات Odin: AP وBL وCP وCSC وHOME_CSC.
+- استُخرجت صور kernel/DTBO وvendor/ODM وDLKM المطلوبة؛ اجتاز `validate_a115f_firmware_layout.py` فحص الحجم الفيزيائي لـ`super`، المجموعة، partition inventory، manifests وخدمات Keymaster/KeyMint وFBE declarations.
+- بدأ `make_rom.sh` لكنه توقف في `unica/patches/stock_blobs/customize.sh` عند نسخ `system/saiv`، برسالة: `File not found: out/fw/SM-A115F_MWD/system/saiv`.
 
-## ما بقي قبل اختبار الإقلاع
+### السبب والإصلاح
 
-يلزم تشغيل workflow بعد التعديل ليتحقق من تنزيل archive من MWD، ومطابقة AP/CSC/CP/BL والـOdin MD5، واستخراج كل target-side partitions مع boot/DTBO، ثم تمرير firmware-layout validator. بعد ذلك فقط يمكن بناء ZIP وتشغيل ZIP validator. لا توجد حتى الآن حزمة ZIP أو نتيجة اختبار على الهاتف، ولا يوجد ادعاء بأن الروم وصل للـboot animation.
+كان importer يطلب من `extract_fw.sh` أقسام `odm` وDLKM و`vendor` فقط للهدف، بينما patch العام `stock_blobs` يستخدم أيضًا شجرة `system` الأصلية كمصدر لملفات stock. لا يعني هذا أن `system/saiv` غير موجود في firmware نفسه؛ كانت صورة target `system` ببساطة غير مستخرجة.
+
+الإصلاح الحالي:
+
+1. إضافة `system.img` إلى قائمة استخراج target، واعتبار `system` و`vendor` مخرجات مطلوبة مع ملفات `fs_config` و`file_context`.
+2. جعل validator يتطلب شجرة target `system` غير الفارغة وmetadata الخاصة بها، وتشغيل layout validation كاملًا قبل إعادة استخدام cache قديم.
+3. جعل استبدال SAIV مشروطًا بوجود `system/saiv` في الشجرة المستخرجة. عند غيابه تُحذف نسخة donor-only ويُسجل التخطي بدل فشل build.
+4. إضافة اختبارات regression للحالتين: وجود SAIV الهدف وغيابه.
+
+نجحت **46 وحدة اختبار محلية**، وفحوص Python/Bash و`git diff --check`. هذه فحوص ثابتة وليست ZIP أو إثبات إقلاع. يجب تشغيل Workflow جديد لأن الإضافة إلى target `system` تزيد استهلاك المساحة والوقت، وللتأكد من أن بقية stock-blob patches تكتمل.
+
+## ما بقي
+
+لا يوجد ZIP flashable ناتج ولا اختبار على الجهاز. بعد CI الجديد، يجب أن ينجح بناء الحزمة ومدقق ZIP أولًا. ثم يلزم اختبار clean flash على جهاز SM-A115F احتياطي أو قابل للاستعادة، وجمع `logcat -b all` و`pstore/last_kmsg` إذا لم يصل إلى boot animation. سبب FBE `K00R` لا يزال غير محسوم؛ اجتياز الفحوص الثابتة لا يثبت توافق Keymaster/TEE أثناء التشغيل.
 
 ## المراجع
 
-[1]: https://github.com/nova-arch008/ZineROM-a11q/actions/runs/40117738481 "سجل أول بناء A115F الفاشل عند FUS"
-[2]: https://github.com/topjohnwu/samloader-rs/releases/tag/2.2.0 "Samloader-rs 2.2.0 المستخدم لاستعلام FUS"
-[3]: https://samfrew.com/download/Galaxy__A11____/6nm4/MWD/A115FXXS6CWK2/A115FOJM6CWK1 "فهرس firmware SM-A115F لمنطقة MWD"
-[4]: https://samfw.com/firmware/SM-A115F/PNG/A115FXXS6CWK2 "فهرس firmware SM-A115F لمنطقة PNG"
-[5]: https://fota-cloud-dn.ospserver.net/firmware/INS/SM-A115F/version.xml "Samsung FUS version feed لـINS"
-[6]: https://fota-cloud-dn.ospserver.net/firmware/MWD/SM-A115F/version.xml "Samsung FUS version feed لـMWD"
-[7]: https://fota-cloud-dn.ospserver.net/firmware/PNG/SM-A115F/version.xml "Samsung FUS version feed لـPNG"
-[8]: https://fota-cloud-dn.ospserver.net/firmware/EGY/SM-A115F/version.xml "Samsung FUS version feed لـEGY"
+[1]: https://github.com/nova-arch008/ZineROM-a11q/actions/runs/40117738481 "سجل فشل طلب FUS الأول"
+[2]: https://github.com/nova-arch008/ZineROM-a11q/actions/runs/40120489519 "سجل استيراد target وفشل stock_blobs"
+[3]: https://github.com/topjohnwu/samloader-rs/releases/tag/2.2.0 "Samloader-rs 2.2.0 المستخدم لاستعلام FUS"
+[4]: https://samfrew.com/download/Galaxy__A11____/6nm4/MWD/A115FXXS6CWK2/A115FOJM6CWK1 "فهرس firmware SM-A115F لمنطقة MWD"
+[5]: https://samfw.com/firmware/SM-A115F/PNG/A115FXXS6CWK2 "فهرس firmware SM-A115F للإقليم PNG"

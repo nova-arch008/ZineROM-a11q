@@ -124,6 +124,16 @@ def validate(
     require(partitions, "Target super partition list is empty or missing")
     require("system" in partitions and "vendor" in partitions, "Target super list must include system and vendor")
 
+    # The target system is not flashed, but stock_blobs patches use it as a source
+    # for device-specific files. Require it so incomplete imports fail before patching.
+    stock_system = firmware_dir / "system"
+    require(stock_system.is_dir() and any(item.is_file() for item in stock_system.rglob("*")),
+            "Target stock-system source tree is missing or empty")
+    for metadata_name in ("fs_config-system", "file_context-system"):
+        metadata_file = firmware_dir / metadata_name
+        require(metadata_file.is_file() and metadata_file.stat().st_size > 0,
+                f"Missing extraction metadata for target stock-system source: {metadata_name}")
+
     # system/product/system_ext are supplied by the donor or merged by the port.
     # Every other logical partition is hardware-specific and must be extracted
     # from the exact A115F firmware rather than silently dropped by remove_all_groups.
@@ -221,6 +231,7 @@ def validate(
     return [
         f"Target firmware version: PASS ({extracted_version})",
         f"Target super geometry: PASS (physical={super_size}, group={group_name}:{group_size} bytes)",
+        "Target stock system source: PASS (system; source-only for stock blob patches)",
         "Target vendor-side partitions: PASS (" + ", ".join(sorted(hardware_partitions)) + ")",
         "Target boot/DTBO images: PASS",
         f"Target VINTF security HAL declaration: PASS ({len(manifests)} manifest file(s), Keymaster/KeyMint)",

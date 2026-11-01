@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import shutil
 import tempfile
 import unittest
 from pathlib import Path
@@ -35,6 +36,11 @@ class ValidateA115FFirmwareLayoutTests(unittest.TestCase):
         firmware.mkdir()
         (firmware / ".extracted").write_text(VERSION, encoding="utf-8")
         (firmware / "os_partitions_metadata.txt").write_text(metadata, encoding="utf-8")
+        system = firmware / "system"
+        (system / "system/framework").mkdir(parents=True)
+        (system / "system/framework/services.jar").write_bytes(b"stock-system")
+        (firmware / "fs_config-system").write_text("system 0 0 755\n", encoding="utf-8")
+        (firmware / "file_context-system").write_text("/system u:object_r:system_file:s0\n", encoding="utf-8")
         vendor = firmware / "vendor"
         (vendor / "etc/vintf").mkdir(parents=True)
         (vendor / "etc/vintf/manifest.xml").write_text(
@@ -70,6 +76,13 @@ class ValidateA115FFirmwareLayoutTests(unittest.TestCase):
             firmware = self.make_firmware(Path(directory))
             messages = VALIDATOR.validate(firmware, CONFIG, VERSION)
         self.assertTrue(any("Target vendor-side partitions: PASS (vendor)" in message for message in messages))
+
+    def test_rejects_missing_target_stock_system_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            firmware = self.make_firmware(Path(directory))
+            shutil.rmtree(firmware / "system")
+            with self.assertRaisesRegex(VALIDATOR.ValidationError, "stock-system source tree"):
+                VALIDATOR.validate(firmware, CONFIG, VERSION)
 
     def test_rejects_missing_partition_list_entry(self) -> None:
         metadata = METADATA.replace("system product vendor", "system product vendor vendor_dlkm")
